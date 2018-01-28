@@ -61,6 +61,7 @@ impl AfterMiddleware for Custom404 {
 
 fn main() {
     //HTTP
+    println!("Coinamics Server HTTP");
     let mut router = Router::new();
     router.get("/", handler_simple, "index");
     router.get("/:query", handler_query_bars, "query");
