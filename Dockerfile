@@ -1,7 +1,7 @@
 FROM ubuntu:16.04
 MAINTAINER J. Dumont <j.dumont@coinamics.io>
 
-EXPOSE 8081
+EXPOSE 8080
 
 ENV appname server-http
 

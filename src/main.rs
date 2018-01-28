@@ -72,8 +72,8 @@ fn main() {
     chain.link_after(ResponseTime);
     chain.link_after(Custom404);
     //chain.link(Write::<HitCounter>::both(0));
-    static http_port: i32 = 8081;
-    let address="0.0.0.0:8081";
+    static http_port: i32 = 8080;
+    let address="0.0.0.0:8080";
     if let Ok(server) = Iron::new(chain).http(address) {
         println!("HTTP server listening on {}", address);
     } else {
