@@ -73,10 +73,11 @@ fn main() {
     chain.link_after(Custom404);
     //chain.link(Write::<HitCounter>::both(0));
     static http_port: i32 = 8081;
-    if let Ok(server) = Iron::new(chain).http("127.0.0.1:8081") {
-        println!("HTTP server listening on {}", http_port);
+    let address="0.0.0.0:8081";
+    if let Ok(server) = Iron::new(chain).http(address) {
+        println!("HTTP server listening on {}", address);
     } else {
-        println!("HTTP server could not connect on {}", http_port);
+        println!("HTTP server could not connect on {}", address);
     }
 }
 
