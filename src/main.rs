@@ -112,7 +112,6 @@ fn main() {
 
             thread::sleep(std::time::Duration::new(2, 0));
             refresh_price("binance".to_string(), &bidask, &bidasktxt);
-
         }));
         loop {
             sched.tick();
