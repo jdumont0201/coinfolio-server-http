@@ -105,7 +105,7 @@ fn main() {
     children.push(thread::spawn(move || {
         println!("update data thread");
         let mut sched = job_scheduler::JobScheduler::new();
-        sched.add(job_scheduler::Job::new("1/10 * * * * *".parse().unwrap(), || {
+        sched.add(job_scheduler::Job::new("1/2 * * * * *".parse().unwrap(), || {
             println!("---------------- refresh --------------------");
             refresh_bidask("binance".to_string(), &bidask, &bidasktxt);
             refresh_bidask("hitbtc".to_string(),&bidask,&bidasktxt);
