@@ -187,31 +187,35 @@ fn update_bidasktext(broker: &String, text: String, bidaskt: &BidaskTextRegistry
 }
 
 fn hmToText(hm: &HashMap<String, Data>) -> String {
+    //println!("hm");
     let mut st = "{".to_string();
     let mut first = true;
     for (symbol, data) in hm.iter() {
+      //  println!("hm d {}",symbol);
         let bid: String;
         let ask: String;
         let last: String;
         match data.bid {
-            Some(ref b) => { bid = format!("\"bid\":\"{}\",",b.to_string());   }
-            None => bid = "".to_string()
+            Some(ref b) => { bid = format!("\"{}\"",b.to_string());   }
+            None => { bid = "null".to_string();   }
         }
         match data.ask {
-            Some(ref b) => { ask = b.to_string() }
-            None => ask = "".to_string()
+            Some(ref b) => { ask = format!("\"{}\"",b.to_string());   }
+            None => { ask = "null".to_string();   }
         }
         match data.last {
-            Some(ref b) => { last = b.to_string() }
-            None => last = "".to_string()
+            Some(ref b) => { last = format!("\"{}\"",b.to_string());   }
+            None => { last = "null".to_string();   }
         }
         if first {
-            st = format!("{}\"{}\":{{{}\"ask\":{},\"last\":{}}}", st, symbol, bid, ask, last);
+            st = format!("{}\"{}\":{{\"bid\":{},\"ask\":{},\"last\":{}}}", st, symbol, bid, ask, last);
         } else {
-            st = format!("{},\"{}\":{{{}\"ask\":{},\"last\":{}}}", st, symbol, bid, ask, last);
+            st = format!("{},\"{}\":{{\"bid\":{},\"ask\":{},\"last\":{}}}", st, symbol, bid, ask, last);
         }
         first = false;
     }
+    //println!("hmd");
+    //println!("hmd {}",st);
     format!("{}}}", st)
 }
 
@@ -251,14 +255,14 @@ struct binance_price {
 
 #[derive(Serialize, Deserialize)]
 struct hitbtc_bidask {
-    ask: String,
+    ask: Option<String>,
     bid: Option<String>,
-    last: String,
-    open: String,
-    low: String,
-    high: String,
-    volume: String,
-    volumeQuote: String,
+    last: Option<String>,
+    open: Option<String>,
+    low: Option<String>,
+    high: Option<String>,
+    volume: Option<String>,
+    volumeQuote: Option<String>,
     timestamp: String,
     symbol: String,
 }
@@ -270,6 +274,7 @@ mod Universal {
     use Data;
 
     fn getGeneric_hashmap(task: String, broker: String, text: String) -> HashMap<String, Data> {
+        //println!("getgenhash {} {}",broker,text);
         let mut r = HashMap::new();
         if task == "bidask" {
             if broker == "binance" {
@@ -282,7 +287,7 @@ mod Universal {
                 let bs: Vec<super::hitbtc_bidask> = super::serde_json::from_str(&text).unwrap();
                 for row in bs {
 
-                    r.insert(row.symbol, Data { bid: row.bid, ask: Some(row.ask), last: Some(row.last) });
+                    r.insert(row.symbol, Data { bid: row.bid, ask: row.ask, last: row.last });
                 }
             }
         } else if task == "price" {
@@ -297,6 +302,7 @@ mod Universal {
     }
 
     pub fn fetch_bidask(broker: &String) -> HashMap<String, Data> {
+        //println!("fetch bidask {}",broker);
         let url = get_url("bidask".to_string(), broker);
         let mut result: HashMap<String, Data>;
         if let Ok(mut res) = reqwest::get(&url) {
@@ -317,6 +323,7 @@ mod Universal {
     }
 
     pub fn fetch_price(broker: &String) -> HashMap<String, Data> {
+        //println!("fetch price {}",broker);
         let url = get_url("price".to_string(), &broker);
 
         let mut result: HashMap<String, Data>;
