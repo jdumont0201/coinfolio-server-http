@@ -194,7 +194,7 @@ fn hmToText(hm: &HashMap<String, Data>) -> String {
         let ask: String;
         let last: String;
         match data.bid {
-            Some(ref b) => { bid = b.to_string() }
+            Some(ref b) => { bid = format!("\"bid\":\"{}\",",b.to_string());   }
             None => bid = "".to_string()
         }
         match data.ask {
@@ -206,9 +206,9 @@ fn hmToText(hm: &HashMap<String, Data>) -> String {
             None => last = "".to_string()
         }
         if first {
-            st = format!("{}\"{}\":{{\"bid\":{},\"ask\":{},\"last\":{}}}", st, symbol, bid, ask, last);
+            st = format!("{}\"{}\":{{{}\"ask\":{},\"last\":{}}}", st, symbol, bid, ask, last);
         } else {
-            st = format!("{},\"{}\":{{\"bid\":{},\"ask\":{},\"last\":{}}}", st, symbol, bid, ask, last);
+            st = format!("{},\"{}\":{{{}\"ask\":{},\"last\":{}}}", st, symbol, bid, ask, last);
         }
         first = false;
     }
