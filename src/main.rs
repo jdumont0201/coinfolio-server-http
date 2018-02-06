@@ -1,5 +1,6 @@
 extern crate iron;
 extern crate time;
+extern crate hyper;
 extern crate router;
 extern crate chrono;
 extern crate serde;
@@ -68,24 +69,26 @@ fn main() {
     let mut ae: HashMap<String, HashMap<String, Data>> = HashMap::new();
     ae.insert("binance".to_string(), HashMap::new());
     ae.insert("hitbtc".to_string(), HashMap::new());
+    //ae.insert("kraken".to_string(), HashMap::new());
     let mut bidask: BidaskRegistry = Arc::new(Mutex::new(Some(ae)));
 
     let mut aet: HashMap<String, String> = HashMap::new();
     aet.insert("binance".to_string(), "".to_string());
     aet.insert("hitbtc".to_string(), "".to_string());
+    //aet.insert("kraken".to_string(), "".to_string());
     let mut bidasktxt: BidaskTextRegistry = Arc::new(Mutex::new(Some(aet)));
 
     let bidask2 = bidask.clone();
     let bidaskt2 = bidasktxt.clone();
     children.push(thread::spawn(move || {
-
         //HTTP
         println!("Coinamics Server HTTP");
+
+
+
         let mut router = Router::new();
         router.get("/", handler_simple, "index");
-
         router.get("/favicon.ico", handler_favicon, "favicon");
-
         let bidask3 = bidaskt2.clone();
         router.get("/public/:broker/bidask", move |request: &mut Request| get_bidask(request, &bidask3), "ticker");
         let mut chain = Chain::new(router);
@@ -109,6 +112,8 @@ fn main() {
             println!("---------------- refresh --------------------");
             refresh_bidask("binance".to_string(), &bidask, &bidasktxt);
             refresh_bidask("hitbtc".to_string(),&bidask,&bidasktxt);
+            refresh_bidask("kraken".to_string(),&bidask,&bidasktxt);
+
 
             thread::sleep(std::time::Duration::new(2, 0));
             refresh_price("binance".to_string(), &bidask, &bidasktxt);
@@ -124,6 +129,7 @@ fn main() {
 }
 
 fn refresh_bidask(broker: String, mut bidask: &BidaskRegistry, bidaskt: &BidaskTextRegistry) {
+    println!("refresh {}",broker);
     if let Ok(mut opt) = bidask.lock() {
         if let Some(ref mut hm) = *opt { //open option
             let mut val: Option<&mut HashMap<String, Data>> = hm.get_mut(&broker);
@@ -234,7 +240,12 @@ fn get_bidask(req: &mut Request, ticker: &BidaskTextRegistry) -> IronResult<Resp
             }
         } else {}
     }
-    Ok(Response::with((status::Ok, val)))
+
+//    let mut headers = iron::modifiers::Header(hyper::header::AccessControlAllowOrigin::Any    );
+    let mut res=Response::with((status::Ok, val));
+    res.headers.set(iron::headers::AccessControlAllowOrigin::Any);
+    //resp.headers.set(hyper::header::AccessControlAllowOrigin::Any);
+    Ok(res)
 }
 
 #[derive(Serialize, Deserialize)]
@@ -268,6 +279,26 @@ struct hitbtc_bidask {
 }
 
 
+#[derive(Serialize, Deserialize)]
+struct kraken_bidask {
+    error: Vec<String>,
+    result: Vec<kraken_bidask_in>
+}
+
+#[derive(Serialize, Deserialize)]
+struct kraken_bidask_in {
+    a: Option<Vec<String>>,
+    b: Option<Vec<String>>,
+    c: Option<Vec<String>>,
+    v: Option<Vec<String>>,
+    p: Option<Vec<String>>,
+    t: Option<Vec<String>>,
+    l: Option<Vec<String>>,
+    h: Option<Vec<String>>,
+    o: Option<Vec<String>>
+}
+
+
 mod Universal {
     use reqwest;
     use std::collections::HashMap;
@@ -286,9 +317,22 @@ mod Universal {
                 //println!("format {} {} ",broker,text);
                 let bs: Vec<super::hitbtc_bidask> = super::serde_json::from_str(&text).unwrap();
                 for row in bs {
-
                     r.insert(row.symbol, Data { bid: row.bid, ask: row.ask, last: row.last });
                 }
+            }else if broker=="kraken"{
+                println!("json {}",text);
+                let bs: super::kraken_bidask = super::serde_json::from_str(&text).unwrap();
+                println!("json de");
+                for row in bs.result {
+                    if let Some(a_) = row.a{
+                        println!("bs {:?}",a_);
+                    }else{
+                        println!("cannot rowres")
+                    }
+
+                    //r.insert(row.symbol, Data { bid: Some(row.b[0]), ask: Some(row.a[0]), last: Some(row.c[0]) });
+                }
+
             }
         } else if task == "price" {
             if broker == "binance" {
@@ -309,6 +353,7 @@ mod Universal {
             let getres = match res.text() {
                 Ok(val) => {
                     let v = getGeneric_hashmap("bidask".to_string(), broker.to_string(), val);
+                    println!("{} {}",broker,broker);
                     result = v;
                 }
                 Err(err) => {
@@ -353,6 +398,8 @@ mod Universal {
                 r = "https://api.binance.com/api/v1/ticker/bookTicker".to_string();
             } else if broker == "hitbtc" {
                 r = "https://api.hitbtc.com/api/2/public/ticker".to_string();
+            }else if broker=="kraken"{
+                r = "https://api.kraken.com/0/public/Ticker?pair=BCHUSD,BCHXBT,DASHUSD,DASHXBT,EOSXBT,GNOXBT,USDTZUSD,XETCXXBT,XETCZUSD,XETHXXBT,XETHZUSD,XETHZUSD.d,XICNXXBT,XLTCXXBT,XLTCZUSD,XMLNXXBT,XREPXXBT,XXBTZCAD,XXBTZCAD.d,XXBTZUSD,XXBTZUSD.d,XXDGXXBT,XXLMXXBT,XXMRXXBT,XXMRZUSD,XXRPXXBT,XXRPZUSD,XZECXXBT,XZECZUSD".to_string()
             }
         } else if task == "price" {
             if broker == "binance" {
