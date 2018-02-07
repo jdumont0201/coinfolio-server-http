@@ -73,6 +73,7 @@ fn main() {
     ae.insert("hitbtc".to_string(), HashMap::new());
     ae.insert("kucoin".to_string(), HashMap::new());
     ae.insert("kraken".to_string(), HashMap::new());
+    ae.insert("cryptonia".to_string(), HashMap::new());
     let mut bidask: BidaskRegistry = Arc::new(Mutex::new(Some(ae)));
 
     let mut aet: HashMap<String, String> = HashMap::new();
@@ -80,6 +81,7 @@ fn main() {
     aet.insert("hitbtc".to_string(), "".to_string());
     aet.insert("kucoin".to_string(), "".to_string());
     aet.insert("kraken".to_string(), "".to_string());
+    aet.insert("cryptonia".to_string(), "".to_string());
     let mut bidasktxt: BidaskTextRegistry = Arc::new(Mutex::new(Some(aet)));
 
     let bidask2 = bidask.clone();
@@ -117,6 +119,7 @@ fn main() {
             refresh_bidask("hitbtc".to_string(), &bidask, &bidasktxt);
             refresh_bidask("kraken".to_string(), &bidask, &bidasktxt);
             refresh_bidask("kucoin".to_string(), &bidask, &bidasktxt);
+            refresh_bidask("cryptonia".to_string(), &bidask, &bidasktxt);
 
             thread::sleep(std::time::Duration::new(2, 0));
             refresh_price("binance".to_string(), &bidask, &bidasktxt);
@@ -140,7 +143,7 @@ fn refresh_bidask(broker: String, mut bidask: &BidaskRegistry, bidaskt: &BidaskT
                 let fetched = Universal::fetch_bidask(&broker);
                 update_data(&broker, vv, &fetched);
                 let text = hmToText(vv);
-                
+
                 update_bidasktext(&broker, text, bidaskt);
                 //*vv=hm;
             }
@@ -203,7 +206,6 @@ fn hmToText(hm: &HashMap<String, Data>) -> String {
     let mut st = "{".to_string();
     let mut first = true;
     for (symbol, data) in hm.iter() {
-        //println!("hm d {}",symbol);
         let bid: String;
         let ask: String;
         let last: String;
@@ -317,6 +319,33 @@ struct hitbtc_bidask {
     symbol: String,
 }
 
+#[derive(Serialize, Deserialize)]
+struct cryptonia_bidask {
+    Success:bool,
+    Message:Option<String>,
+    Error:Option<String>,
+    Data:Vec<cryptonia_bidask_in>
+}
+
+#[derive(Serialize, Deserialize)]
+struct cryptonia_bidask_in {
+    TradePairId: u64,
+    Label: String,
+    AskPrice: f64,
+    BidPrice: f64,
+    Low: f64,
+    High: f64,
+    Volume: f64,
+    LastPrice: f64,
+    BuyVolume: f64,
+    SellVolume: f64,
+    Change: f64,
+    Open: f64,
+    Close:f64,
+    BaseVolume: f64,
+    BuyBaseVolume: f64,
+    SellBaseVolume: f64,
+}
 
 #[derive(Serialize, Deserialize)]
 struct kraken_bidask {
@@ -364,6 +393,20 @@ mod Universal {
                     }
                 }else{
                     println!(" !!! cannot unmarshall {} {}",task,broker)
+                }
+            }  else if broker == "cryptonia" {
+
+                let bs: Result<super::cryptonia_bidask,super::serde_json::Error>  = super::serde_json::from_str(&text);
+                match bs {
+                    Ok(bs_) => {
+                        for row in bs_.Data {
+                            let symb = str::replace(&row.Label, "/", "");
+                            r.insert(symb, Data { bid: Some(row.BidPrice.to_string()), ask: Some(row.AskPrice.to_string()), last: Some(row.LastPrice.to_string()) });
+                        }
+                    },
+                    Err(err) => {
+                        println!(" !!! cannot unmarshall {} {} {:?}", task, broker, err)
+                    }
                 }
             } else if broker == "kucoin" {
                 let bs: Result<super::kucoin_bidask,super::serde_json::Error> = super::serde_json::from_str(&text);
@@ -474,6 +517,8 @@ mod Universal {
                 r = "https://api.kraken.com/0/public/Ticker?pair=BCHUSD,BCHXBT,DASHUSD,DASHXBT,EOSXBT,GNOXBT,USDTZUSD,XETCXXBT,XETCZUSD,XETHXXBT,XETHZUSD,XETHZUSD.d,XICNXXBT,XLTCXXBT,XLTCZUSD,XMLNXXBT,XREPXXBT,XXBTZCAD,XXBTZCAD.d,XXBTZUSD,XXBTZUSD.d,XXDGXXBT,XXLMXXBT,XXMRXXBT,XXMRZUSD,XXRPXXBT,XXRPZUSD,XZECXXBT,XZECZUSD".to_string()
             } else if broker == "kucoin" {
                 r = "https://api.kucoin.com/v1/open/tick".to_string()
+            } else if broker == "cryptonia" {
+                r = "https://www.cryptopia.co.nz/api/GetMarkets".to_string()
             }
         } else if task == "price" {
             if broker == "binance" {
