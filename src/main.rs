@@ -89,7 +89,6 @@ fn main() {
         println!("Coinamics Server HTTP");
 
 
-
         let mut router = Router::new();
         router.get("/", handler_simple, "index");
         router.get("/favicon.ico", handler_favicon, "favicon");
@@ -115,10 +114,9 @@ fn main() {
         sched.add(job_scheduler::Job::new("1/2 * * * * *".parse().unwrap(), || {
             println!("---------------- refresh --------------------");
             refresh_bidask("binance".to_string(), &bidask, &bidasktxt);
-            refresh_bidask("hitbtc".to_string(),&bidask,&bidasktxt);
-            refresh_bidask("kraken".to_string(),&bidask,&bidasktxt);
-            refresh_bidask("kucoin".to_string(),&bidask,&bidasktxt);
-
+            refresh_bidask("hitbtc".to_string(), &bidask, &bidasktxt);
+            refresh_bidask("kraken".to_string(), &bidask, &bidasktxt);
+            refresh_bidask("kucoin".to_string(), &bidask, &bidasktxt);
 
             thread::sleep(std::time::Duration::new(2, 0));
             refresh_price("binance".to_string(), &bidask, &bidasktxt);
@@ -134,7 +132,7 @@ fn main() {
 }
 
 fn refresh_bidask(broker: String, mut bidask: &BidaskRegistry, bidaskt: &BidaskTextRegistry) {
-    println!("refresh {}",broker);
+    println!("refresh {}", broker);
     if let Ok(mut opt) = bidask.lock() {
         if let Some(ref mut hm) = *opt { //open option
             let mut val: Option<&mut HashMap<String, Data>> = hm.get_mut(&broker);
@@ -146,10 +144,10 @@ fn refresh_bidask(broker: String, mut bidask: &BidaskRegistry, bidaskt: &BidaskT
                 //*vv=hm;
             }
         } else {
-            println!("err cannot open option bidask {}",broker)
+            println!("err cannot open option bidask {}", broker)
         }
-    }else{
-        println!("err cannot lock arcmutex bidask {}",broker)
+    } else {
+        println!("err cannot lock arcmutex bidask {}", broker)
     }
 }
 
@@ -163,8 +161,7 @@ fn refresh_price(broker: String, mut bidask: &BidaskRegistry, bidaskt: &BidaskTe
                 let text = hmToText(vv);
                 update_bidasktext(&broker, text, bidaskt);
                 //*vv=hm;
-            } else {
-            }
+            } else {}
         } else {}
     }
 }
@@ -175,8 +172,8 @@ fn update_data(broker: &String, mut persistent: &mut HashMap<String, Data>, fetc
         let mut insert: bool = false;
         match persistent.get_mut(symbol) {
             Some(ref mut d) => {
-                if data.last.is_some() {  d.last = data.last.clone(); }
-                if data.ask.is_some() {  d.ask = data.ask.clone(); }
+                if data.last.is_some() { d.last = data.last.clone(); }
+                if data.ask.is_some() { d.ask = data.ask.clone(); }
                 if data.bid.is_some() { d.bid = data.bid.clone(); }
             }
             None => {
@@ -186,7 +183,6 @@ fn update_data(broker: &String, mut persistent: &mut HashMap<String, Data>, fetc
         if insert {
             persistent.insert(symbol.to_string(), Data { last: data.last.clone(), ask: data.ask.clone(), bid: data.bid.clone() });
         }
-
     }
 }
 
@@ -211,16 +207,16 @@ fn hmToText(hm: &HashMap<String, Data>) -> String {
         let ask: String;
         let last: String;
         match data.bid {
-            Some(ref b) => { bid = format!("\"{}\"",b.to_string());   }
-            None => { bid = "null".to_string();   }
+            Some(ref b) => { bid = format!("\"{}\"", b.to_string()); }
+            None => { bid = "null".to_string(); }
         }
         match data.ask {
-            Some(ref b) => { ask = format!("\"{}\"",b.to_string());   }
-            None => { ask = "null".to_string();   }
+            Some(ref b) => { ask = format!("\"{}\"", b.to_string()); }
+            None => { ask = "null".to_string(); }
         }
         match data.last {
-            Some(ref b) => { last = format!("\"{}\"",b.to_string());   }
-            None => { last = "null".to_string();   }
+            Some(ref b) => { last = format!("\"{}\"", b.to_string()); }
+            None => { last = "null".to_string(); }
         }
         if first {
             st = format!("{}\"{}\":{{\"bid\":{},\"ask\":{},\"last\":{}}}", st, symbol, bid, ask, last);
@@ -235,7 +231,6 @@ fn hmToText(hm: &HashMap<String, Data>) -> String {
 }
 
 fn get_bidask(req: &mut Request, ticker: &BidaskTextRegistry) -> IronResult<Response> {
-
     let ref broker: &str = req.extensions.get::<Router>().unwrap().find("broker").unwrap_or("/");
     let key: String = broker.to_string();
     let mut val: String = "".to_string();
@@ -247,18 +242,18 @@ fn get_bidask(req: &mut Request, ticker: &BidaskTextRegistry) -> IronResult<Resp
                     val = op.to_string();
                 }
                 None => {
-                    println!("No match for text broker {}",broker)
+                    println!("No match for text broker {}", broker)
                 }
             }
         } else {
-            println!("Cannot open options {}",broker)
+            println!("Cannot open options {}", broker)
         }
-    }else{
-        println!("Cannot lock arc {}",broker)
+    } else {
+        println!("Cannot lock arc {}", broker)
     }
 
 //    let mut headers = iron::modifiers::Header(hyper::header::AccessControlAllowOrigin::Any    );
-    let mut res=Response::with((status::Ok, val));
+    let mut res = Response::with((status::Ok, val));
     res.headers.set(iron::headers::AccessControlAllowOrigin::Any);
     //resp.headers.set(hyper::header::AccessControlAllowOrigin::Any);
     Ok(res)
@@ -293,19 +288,19 @@ struct kucoin_bidask_in {
     coinType: String,
     trading: bool,
     symbol: String,
-    lastDealPrice: f64,
+    lastDealPrice: Option<f64>,
     buy: Option<f64>,
-    sell: f64,
-    change: f64,
-    coinTypePair: String,
-    sort: u64,
-    feeRate: f64,
-    volValue: f64,
+    sell: Option<f64>,
+    change: Option<f64>,
+    coinTypePair: Option<String>,
+    sort: Option<u64>,
+    feeRate: Option<f64>,
+    volValue: Option<f64>,
     high: Option<f64>,
-    datetime: u64,
-    vol: f64,
+    datetime: Option<u64>,
+    vol: Option<f64>,
     low: Option<f64>,
-    changeRate : f64,
+    changeRate: Option<f64>,
 }
 
 
@@ -327,7 +322,7 @@ struct hitbtc_bidask {
 #[derive(Serialize, Deserialize)]
 struct kraken_bidask {
     error: Vec<String>,
-    result: Vec<kraken_bidask_in>
+    result: Vec<kraken_bidask_in>,
 }
 
 #[derive(Serialize, Deserialize)]
@@ -340,7 +335,7 @@ struct kraken_bidask_in {
     t: Option<Vec<String>>,
     l: Option<Vec<String>>,
     h: Option<Vec<String>>,
-    o: Option<Vec<String>>
+    o: Option<Vec<String>>,
 }
 
 
@@ -350,50 +345,79 @@ mod Universal {
     use Data;
 
     fn getGeneric_hashmap(task: String, broker: String, text: String) -> HashMap<String, Data> {
-        //println!("getgenhash {} {}",broker,text);
         let mut r = HashMap::new();
         if task == "bidask" {
             if broker == "binance" {
-                let bs: Vec<super::binance_bidask> = super::serde_json::from_str(&text).unwrap();
-                for row in bs {
-                    r.insert(row.symbol, Data { bid: Some(row.bidPrice), ask: Some(row.askPrice),/* bidq: Some(row.bidQty), askq: Some(row.askQty),*/ last: None });
+                let bs: Result<Vec<super::binance_bidask>,super::serde_json::Error>  = super::serde_json::from_str(&text);
+                if let Ok(bs_) = bs {
+                    for row in bs_ {
+                        r.insert(row.symbol, Data { bid: Some(row.bidPrice), ask: Some(row.askPrice), /* bidq: Some(row.bidQty), askq: Some(row.askQty),*/ last: None });
+                    }
+                }else{
+                    println!(" !!! cannot unmarshall {} {}",task,broker)
                 }
             } else if broker == "hitbtc" {
                 //println!("format {} {} ",broker,text);
-                let bs: Vec<super::hitbtc_bidask> = super::serde_json::from_str(&text).unwrap();
-                for row in bs {
-                    r.insert(row.symbol, Data { bid: row.bid, ask: row.ask, last: row.last });
+                let bs: Result<Vec<super::hitbtc_bidask>,super::serde_json::Error>  = super::serde_json::from_str(&text);
+                if let Ok(bs_) = bs {
+                    for row in bs_   {
+                        r.insert(row.symbol, Data { bid: row.bid, ask: row.ask, last: row.last });
+                    }
+                }else{
+                    println!(" !!! cannot unmarshall {} {}",task,broker)
                 }
             } else if broker == "kucoin" {
-                let bs: super::kucoin_bidask = super::serde_json::from_str(&text).unwrap();
-                for row in bs.data {
-                    //println!("format {} {} ",broker,text);
-                    let mut b;
-                    if let Some(bb) = row.buy { b=Some(bb.to_string())}
-                    else {b=None }
-                    let symb= str::replace(&row.symbol, "-", "");
-                    r.insert(symb, Data { bid: b, ask: Some(row.sell.to_string()), last:Some(row.lastDealPrice.to_string()) });
+                let bs: Result<super::kucoin_bidask,super::serde_json::Error> = super::serde_json::from_str(&text);
+                match bs {
+                    Ok(bs_) => {
+                        for row in bs_.data {
+                            //println!("format {} {} ",broker,text);
+                            let mut b;
+                            if let Some(bb) = row.buy { b = Some(bb.to_string()) } else { b = None }
+                            let symb = str::replace(&row.symbol, "-", "");
+
+                            let mut la;
+                            if let Some(la_) = row.buy { la = Some(la_.to_string()) } else { la = None }
+ let mut se;
+                            if let Some(se_) = row.sell { se = Some(se_.to_string()) } else { se = None }
+
+                            r.insert(symb, Data { bid: b, ask: se, last: la });
+                        }
+                    },
+                    Err(err) => {
+                        println!(" !!! cannot unmarshall {} {} {:?}", task, broker,err)
+                    }
                 }
-            }else if broker=="kraken"{
-                println!("json {}",text);
-                let bs: super::kraken_bidask = super::serde_json::from_str(&text).unwrap();
+
+            } else if broker == "kraken" {
+                println!("json {}", text);
+                let bs: Result<super::kraken_bidask,super::serde_json::Error> = super::serde_json::from_str(&text);
                 println!("json de");
-                for row in bs.result {
-                    if let Some(a_) = row.a{
-                        println!("bs {:?}",a_);
-                    }else{
+                if let Ok(bs_) = bs{
+                for row in bs_.result {
+                    if let Some(a_) = row.a {
+                        println!("bs {:?}", a_);
+                    } else {
                         println!("cannot rowres")
                     }
 
                     //r.insert(row.symbol, Data { bid: Some(row.b[0]), ask: Some(row.a[0]), last: Some(row.c[0]) });
                 }
-
+                }else{
+                    println!(" !!! cannot unmarshall {} {}",task,broker)
+                }
             }
         } else if task == "price" {
             if broker == "binance" {
-                let bs: Vec<super::binance_price> = super::serde_json::from_str(&text).unwrap();
-                for row in bs {
-                    r.insert(row.symbol, Data { bid: None, ask: None, last: Some(row.price) });
+
+                let bs:Result<Vec<super::binance_price>,super::serde_json::Error>= super::serde_json::from_str(&text);
+                if let Ok(bs_)= bs {
+                    for row in bs_ {
+
+                        r.insert(row.symbol, Data { bid: None, ask: None, last: Some(row.price) });
+                    }
+                }else{
+                    println!(" !!! cannot unmarshall {} {}",task,broker)
                 }
             }
         }
@@ -401,14 +425,14 @@ mod Universal {
     }
 
     pub fn fetch_bidask(broker: &String) -> HashMap<String, Data> {
-        println!("fetch bidask {}",broker);
+        println!("fetch bidask {}", broker);
         let url = get_url("bidask".to_string(), broker);
         let mut result: HashMap<String, Data>;
         if let Ok(mut res) = reqwest::get(&url) {
             let getres = match res.text() {
                 Ok(val) => {
                     let v = getGeneric_hashmap("bidask".to_string(), broker.to_string(), val);
-                    println!("{} {}",broker,broker);
+                    println!("{} {}", broker, broker);
                     result = v;
                 }
                 Err(err) => {
@@ -430,9 +454,7 @@ mod Universal {
         if let Ok(mut res) = reqwest::get(&url) {
             let getres = match res.text() {
                 Ok(val) => {
-
                     let v = getGeneric_hashmap("price".to_string(), broker.to_string(), val);
-
                     result = v;
                 }
                 Err(err) => {
@@ -453,9 +475,9 @@ mod Universal {
                 r = "https://api.binance.com/api/v1/ticker/bookTicker".to_string();
             } else if broker == "hitbtc" {
                 r = "https://api.hitbtc.com/api/2/public/ticker".to_string();
-            }else if broker=="kraken"{
+            } else if broker == "kraken" {
                 r = "https://api.kraken.com/0/public/Ticker?pair=BCHUSD,BCHXBT,DASHUSD,DASHXBT,EOSXBT,GNOXBT,USDTZUSD,XETCXXBT,XETCZUSD,XETHXXBT,XETHZUSD,XETHZUSD.d,XICNXXBT,XLTCXXBT,XLTCZUSD,XMLNXXBT,XREPXXBT,XXBTZCAD,XXBTZCAD.d,XXBTZUSD,XXBTZUSD.d,XXDGXXBT,XXLMXXBT,XXMRXXBT,XXMRZUSD,XXRPXXBT,XXRPZUSD,XZECXXBT,XZECZUSD".to_string()
-            }else if broker=="kucoin"{
+            } else if broker == "kucoin" {
                 r = "https://api.kucoin.com/v1/open/tick".to_string()
             }
         } else if task == "price" {
