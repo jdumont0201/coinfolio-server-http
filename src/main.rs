@@ -140,7 +140,7 @@ fn refresh_bidask(broker: String, mut bidask: &BidaskRegistry, bidaskt: &BidaskT
                 let fetched = Universal::fetch_bidask(&broker);
                 update_data(&broker, vv, &fetched);
                 let text = hmToText(vv);
-                println!("bro {} {}",broker,text);
+                
                 update_bidasktext(&broker, text, bidaskt);
                 //*vv=hm;
             }
@@ -253,10 +253,8 @@ fn get_bidask(req: &mut Request, ticker: &BidaskTextRegistry) -> IronResult<Resp
         println!("Cannot lock arc {}", broker)
     }
 
-//    let mut headers = iron::modifiers::Header(hyper::header::AccessControlAllowOrigin::Any    );
     let mut res = Response::with((status::Ok, val));
     res.headers.set(iron::headers::AccessControlAllowOrigin::Any);
-    //resp.headers.set(hyper::header::AccessControlAllowOrigin::Any);
     Ok(res)
 }
 
