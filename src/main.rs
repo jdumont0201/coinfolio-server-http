@@ -235,6 +235,7 @@ fn hmToText(hm: &HashMap<String, Data>) -> String {
 }
 
 fn get_bidask(req: &mut Request, ticker: &BidaskTextRegistry) -> IronResult<Response> {
+
     let ref broker: &str = req.extensions.get::<Router>().unwrap().find("broker").unwrap_or("/");
     let key: String = broker.to_string();
     let mut val: String = "".to_string();
@@ -370,7 +371,8 @@ mod Universal {
                     let mut b;
                     if let Some(bb) = row.buy { b=Some(bb.to_string())}
                     else {b=None }
-                    r.insert(row.symbol, Data { bid: b, ask: Some(row.sell.to_string()), last:Some(row.lastDealPrice.to_string()) });
+                    let symb= str::replace(&row.symbol, "-", "");
+                    r.insert(symb, Data { bid: b, ask: Some(row.sell.to_string()), last:Some(row.lastDealPrice.to_string()) });
                 }
             }else if broker=="kraken"{
                 println!("json {}",text);
