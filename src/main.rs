@@ -72,14 +72,14 @@ fn main() {
     ae.insert("binance".to_string(), HashMap::new());
     ae.insert("hitbtc".to_string(), HashMap::new());
     ae.insert("kucoin".to_string(), HashMap::new());
-    //ae.insert("kraken".to_string(), HashMap::new());
+    ae.insert("kraken".to_string(), HashMap::new());
     let mut bidask: BidaskRegistry = Arc::new(Mutex::new(Some(ae)));
 
     let mut aet: HashMap<String, String> = HashMap::new();
     aet.insert("binance".to_string(), "".to_string());
     aet.insert("hitbtc".to_string(), "".to_string());
     aet.insert("kucoin".to_string(), "".to_string());
-    //aet.insert("kraken".to_string(), "".to_string());
+    aet.insert("kraken".to_string(), "".to_string());
     let mut bidasktxt: BidaskTextRegistry = Arc::new(Mutex::new(Some(aet)));
 
     let bidask2 = bidask.clone();
@@ -140,6 +140,7 @@ fn refresh_bidask(broker: String, mut bidask: &BidaskRegistry, bidaskt: &BidaskT
                 let fetched = Universal::fetch_bidask(&broker);
                 update_data(&broker, vv, &fetched);
                 let text = hmToText(vv);
+                println!("bro {} {}",broker,text);
                 update_bidasktext(&broker, text, bidaskt);
                 //*vv=hm;
             }
@@ -322,7 +323,7 @@ struct hitbtc_bidask {
 #[derive(Serialize, Deserialize)]
 struct kraken_bidask {
     error: Vec<String>,
-    result: Vec<kraken_bidask_in>,
+    result: HashMap<String, kraken_bidask_in>,
 }
 
 #[derive(Serialize, Deserialize)]
@@ -332,10 +333,10 @@ struct kraken_bidask_in {
     c: Option<Vec<String>>,
     v: Option<Vec<String>>,
     p: Option<Vec<String>>,
-    t: Option<Vec<String>>,
+    t: Option<Vec<u64>>,
     l: Option<Vec<String>>,
     h: Option<Vec<String>>,
-    o: Option<Vec<String>>,
+    o: Option<String>,
 }
 
 
@@ -372,14 +373,10 @@ mod Universal {
                     Ok(bs_) => {
                         for row in bs_.data {
                             //println!("format {} {} ",broker,text);
-                            let mut b;
-                            if let Some(bb) = row.buy { b = Some(bb.to_string()) } else { b = None }
                             let symb = str::replace(&row.symbol, "-", "");
-
-                            let mut la;
-                            if let Some(la_) = row.buy { la = Some(la_.to_string()) } else { la = None }
- let mut se;
-                            if let Some(se_) = row.sell { se = Some(se_.to_string()) } else { se = None }
+                            let mut b;                            if let Some(bb) = row.buy { b = Some(bb.to_string()) } else { b = None }
+                            let mut la;                            if let Some(la_) = row.buy { la = Some(la_.to_string()) } else { la = None }
+                            let mut se;                            if let Some(se_) = row.sell { se = Some(se_.to_string()) } else { se = None }
 
                             r.insert(symb, Data { bid: b, ask: se, last: la });
                         }
@@ -390,21 +387,21 @@ mod Universal {
                 }
 
             } else if broker == "kraken" {
-                println!("json {}", text);
-                let bs: Result<super::kraken_bidask,super::serde_json::Error> = super::serde_json::from_str(&text);
-                println!("json de");
-                if let Ok(bs_) = bs{
-                for row in bs_.result {
-                    if let Some(a_) = row.a {
-                        println!("bs {:?}", a_);
-                    } else {
-                        println!("cannot rowres")
-                    }
 
-                    //r.insert(row.symbol, Data { bid: Some(row.b[0]), ask: Some(row.a[0]), last: Some(row.c[0]) });
-                }
-                }else{
-                    println!(" !!! cannot unmarshall {} {}",task,broker)
+                let bs: Result<super::kraken_bidask,super::serde_json::Error> = super::serde_json::from_str(&text);
+
+                match bs {
+                    Ok(bs_) => {
+                        for (symbol,row) in bs_.result.iter() {
+                            let mut b; match row.b {Some(ref b_)=>{ b=Some(b_[0].to_string())}  ,None=>{b=Some("".to_string())} }
+                            let mut a; match row.a {Some(ref a_)=>{ a=Some(a_[0].to_string())}  ,None=>{a=Some("".to_string())} }
+                            let mut c; match row.c {Some(ref c_)=>{ c=Some(c_[0].to_string())}  ,None=>{c=Some("".to_string())} }
+                            r.insert(symbol.to_string(), Data { bid: b, ask: a, last: c });
+                        }
+                    },
+                    Err(err) => {
+                        println!(" !!! cannot unmarshall {} {} {:?}", task, broker,err)
+                    }
                 }
             }
         } else if task == "price" {
