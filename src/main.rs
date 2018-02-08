@@ -30,9 +30,12 @@ struct Custom404;
 pub struct Data {
     bid: Option<String>,
     ask: Option<String>,
-    //askq: Option<String>,
-    //bidq: Option<String>,
     last: Option<String>,
+}
+pub struct DepthData {
+    bids: Vec<Vec<f64>>,
+    asks: Vec<Vec<f64>>,
+
 }
 
 type BidaskRegistry = Arc<Mutex<Option<HashMap<String, HashMap<String, Data>>>>>;
@@ -89,13 +92,12 @@ fn main() {
     children.push(thread::spawn(move || {
         //HTTP
         println!("Coinamics Server HTTP");
-
-
         let mut router = Router::new();
         router.get("/", handler_simple, "index");
         router.get("/favicon.ico", handler_favicon, "favicon");
         let bidask3 = bidaskt2.clone();
         router.get("/public/:broker/bidask", move |request: &mut Request| get_bidask(request, &bidask3), "ticker");
+        router.get("/public/:broker/depth/:pair", move |request: &mut Request| get_depth(request), "depth");
         let mut chain = Chain::new(router);
         chain.link_before(ResponseTime);
         chain.link_after(ResponseTime);
@@ -233,6 +235,16 @@ fn hmToText(hm: &HashMap<String, Data>) -> String {
     format!("{}}}", st)
 }
 
+fn get_depth(req: &mut Request) -> IronResult<Response> {
+    let ref broker: &str = req.extensions.get::<Router>().unwrap().find("broker").unwrap_or("/");
+    let ref pair: &str = req.extensions.get::<Router>().unwrap().find("pair").unwrap_or("/");
+    let text=Universal::fetch_depth(&broker.to_string(),&pair.to_string());
+
+
+    let mut res = Response::with((status::Ok, text));
+    res.headers.set(iron::headers::AccessControlAllowOrigin::Any);
+    Ok(res)
+}
 fn get_bidask(req: &mut Request, ticker: &BidaskTextRegistry) -> IronResult<Response> {
     let ref broker: &str = req.extensions.get::<Router>().unwrap().find("broker").unwrap_or("/");
     let key: String = broker.to_string();
@@ -258,6 +270,13 @@ fn get_bidask(req: &mut Request, ticker: &BidaskTextRegistry) -> IronResult<Resp
     let mut res = Response::with((status::Ok, val));
     res.headers.set(iron::headers::AccessControlAllowOrigin::Any);
     Ok(res)
+}
+
+#[derive(Serialize, Deserialize)]
+struct binance_depth {
+    lastUpdateId: String,
+    bids: Vec<Vec<f64>>,
+    asks: Vec<Vec<f64>>
 }
 
 #[derive(Serialize, Deserialize)]
@@ -371,6 +390,7 @@ mod Universal {
     use reqwest;
     use std::collections::HashMap;
     use Data;
+    use DepthData;
 
     fn getGeneric_hashmap(task: String, broker: String, text: String) -> HashMap<String, Data> {
         let mut r = HashMap::new();
@@ -451,7 +471,6 @@ mod Universal {
                 let bs:Result<Vec<super::binance_price>,super::serde_json::Error>= super::serde_json::from_str(&text);
                 if let Ok(bs_)= bs {
                     for row in bs_ {
-
                         r.insert(row.symbol, Data { bid: None, ask: None, last: Some(row.price) });
                     }
                 }else{
@@ -461,7 +480,18 @@ mod Universal {
         }
         r
     }
+    fn getGeneric_depth_hashmap(task: String, broker: String, text: String) -> String {
+        let mut r : String="".to_string();
+         if task == "depth" {
+            if broker == "binance" {
+                let text2 = str::replace(&text, ",[]", "");
 
+                        r=text2;
+
+            }
+        }
+        r
+    }
     pub fn fetch_bidask(broker: &String) -> HashMap<String, Data> {
         println!("fetch bidask {}", broker);
         let url = get_url("bidask".to_string(), broker);
@@ -480,6 +510,29 @@ mod Universal {
             };
         } else {
             result = HashMap::new();
+        }
+        result
+    }
+
+
+    pub fn fetch_depth(broker: &String,pair:&String) -> String {
+        println!("fetch string {}", broker);
+        let url = format!("{}{}",get_url("depth".to_string(), broker),pair);
+        let mut result: String;
+        if let Ok(mut res) = reqwest::get(&url) {
+            let getres = match res.text() {
+                Ok(val) => {
+                    let v = getGeneric_depth_hashmap("depth".to_string(), broker.to_string(), val);
+                    println!("{} {}", broker, broker);
+                    result = v;
+                }
+                Err(err) => {
+                    println!("[GET_DEPTH] err");
+                    result = "".to_string()
+                }
+            };
+        } else {
+            result = "".to_string()
         }
         result
     }
@@ -525,6 +578,10 @@ mod Universal {
                 r = "https://api.binance.com/api/v3/ticker/price".to_string();
             } else if broker == "hitbtc" {
                 r = "https://api.hitbtc.com/api/2/public/ticker".to_string();
+            }
+        }else if task=="depth"{
+            if broker=="binance" {
+                r="https://api.binance.com/api/v1/depth?symbol=".to_string()
             }
         }
         r
