@@ -70,7 +70,7 @@ fn main() {
     ae.insert("hitbtc".to_string(), HashMap::new());
     ae.insert("kucoin".to_string(), HashMap::new());
     ae.insert("kraken".to_string(), HashMap::new());
-    ae.insert("cryptonia".to_string(), HashMap::new());
+    ae.insert("cryptopia".to_string(), HashMap::new());
     let mut bidask: BidaskRegistry = Arc::new(Mutex::new(Some(ae)));
 
     let mut aet: HashMap<String, String> = HashMap::new();
@@ -78,7 +78,7 @@ fn main() {
     aet.insert("hitbtc".to_string(), "".to_string());
     aet.insert("kucoin".to_string(), "".to_string());
     aet.insert("kraken".to_string(), "".to_string());
-    aet.insert("cryptonia".to_string(), "".to_string());
+    aet.insert("cryptopia".to_string(), "".to_string());
     let mut bidasktxt: BidaskTextRegistry = Arc::new(Mutex::new(Some(aet)));
 
     let bidask2 = bidask.clone();
@@ -115,7 +115,7 @@ fn main() {
             refresh_bidask("hitbtc".to_string(), &bidask, &bidasktxt);
             refresh_bidask("kraken".to_string(), &bidask, &bidasktxt);
             refresh_bidask("kucoin".to_string(), &bidask, &bidasktxt);
-            refresh_bidask("cryptonia".to_string(), &bidask, &bidasktxt);
+            refresh_bidask("cryptopia".to_string(), &bidask, &bidasktxt);
 
             thread::sleep(std::time::Duration::new(2, 0));
             refresh_price("binance".to_string(), &bidask, &bidasktxt);

@@ -81,15 +81,15 @@
     }
 
     #[derive(Serialize, Deserialize)]
-    struct cryptonia_bidask {
+    struct cryptopia_bidask {
         Success:bool,
         Message:Option<String>,
         Error:Option<String>,
-        Data:Vec<cryptonia_bidask_in>
+        Data:Vec<cryptopia_bidask_in>
     }
 
     #[derive(Serialize, Deserialize)]
-    struct cryptonia_bidask_in {
+    struct cryptopia_bidask_in {
         TradePairId: u64,
         Label: String,
         AskPrice: f64,
@@ -150,9 +150,9 @@
                 }else{
                     println!(" !!! cannot unmarshall {} {}",task,broker)
                 }
-            }  else if broker == "cryptonia" {
+            }  else if broker == "cryptopia" {
 
-                let bs: Result<cryptonia_bidask,serde_json::Error>  = serde_json::from_str(&text);
+                let bs: Result<cryptopia_bidask,serde_json::Error>  = serde_json::from_str(&text);
                 match bs {
                     Ok(bs_) => {
                         for row in bs_.Data {
@@ -306,7 +306,7 @@
                 r = "https://api.kraken.com/0/public/Ticker?pair=BCHUSD,BCHXBT,DASHUSD,DASHXBT,EOSXBT,GNOXBT,USDTZUSD,XETCXXBT,XETCZUSD,XETHXXBT,XETHZUSD,XETHZUSD.d,XICNXXBT,XLTCXXBT,XLTCZUSD,XMLNXXBT,XREPXXBT,XXBTZCAD,XXBTZCAD.d,XXBTZUSD,XXBTZUSD.d,XXDGXXBT,XXLMXXBT,XXMRXXBT,XXMRZUSD,XXRPXXBT,XXRPZUSD,XZECXXBT,XZECZUSD".to_string()
             } else if broker == "kucoin" {
                 r = "https://api.kucoin.com/v1/open/tick".to_string()
-            } else if broker == "cryptonia" {
+            } else if broker == "cryptopia" {
                 r = "https://www.cryptopia.co.nz/api/GetMarkets".to_string()
             }
         } else if task == "price" {
