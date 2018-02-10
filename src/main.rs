@@ -28,8 +28,8 @@ use time::Duration;
 
 //CUSTOM MODULES
 mod Universal;
-mod Serve;
-mod Refresh;
+mod ServeHTTP;
+mod RefreshData;
 mod middlewares;
 
 //TYPES FOR SHARED STRUCTURES ACROSS THREADS
@@ -80,11 +80,11 @@ fn start_http_server(text_registry: &BidaskTextRegistry) {
     println!("Coinamics Server HTTP");
     //create routes
     let mut router = Router::new();
-    router.get("/", Serve::handler_simple, "index");
-    router.get("/favicon.ico", Serve::handler_favicon, "favicon");
+    router.get("/", ServeHTTP::handler_simple, "index");
+    router.get("/favicon.ico", ServeHTTP::handler_favicon, "favicon");
     let bidask3 = text_registry.clone();
-    router.get("/public/:broker/bidask", move |request: &mut Request| Serve::get_bidask(request, &bidask3), "ticker");
-    router.get("/public/:broker/depth/:pair", move |request: &mut Request| Serve::get_depth(request), "depth");
+    router.get("/public/:broker/bidask", move |request: &mut Request| ServeHTTP::get_bidask(request, &bidask3), "ticker");
+    router.get("/public/:broker/depth/:pair", move |request: &mut Request| ServeHTTP::get_depth(request), "depth");
 
     //add middlewares
     let mut chain = Chain::new(router);
@@ -111,12 +111,12 @@ fn start_datarefresh_thread(data_registry: &BidaskRegistry, text_registry: &Bida
         for i in 0..BROKERS.len() {
             let bidask2 = data_registry.clone();
             let bidasktxt2 = text_registry.clone();
-            thread::spawn(move || { Refresh::refresh_bidask(BROKERS[i].to_string(), &bidask2, &bidasktxt2); });
+            thread::spawn(move || { RefreshData::refresh_bidask(BROKERS[i].to_string(), &bidask2, &bidasktxt2); });
         }
 
 
         thread::sleep(std::time::Duration::new(2, 0));
-        Refresh::refresh_price("binance".to_string(), data_registry, text_registry);
+        RefreshData::refresh_price("binance".to_string(), data_registry, text_registry);
     }));
     loop {
         sched.tick();

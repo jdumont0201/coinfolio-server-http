@@ -4,6 +4,8 @@ use Universal::Data;
 use Universal;
 use Universal::DepthData;
 use std::collections::HashMap;
+
+
 pub fn refresh_bidask(broker: String, mut bidask: &BidaskRegistry, bidaskt: &BidaskTextRegistry) {
     if let Ok(mut opt) = bidask.lock() {
         if let Some(ref mut hm) = *opt { //open option
