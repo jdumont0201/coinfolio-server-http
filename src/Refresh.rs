@@ -5,7 +5,6 @@ use Universal;
 use Universal::DepthData;
 use std::collections::HashMap;
 pub fn refresh_bidask(broker: String, mut bidask: &BidaskRegistry, bidaskt: &BidaskTextRegistry) {
-    println!("refresh {}", broker);
     if let Ok(mut opt) = bidask.lock() {
         if let Some(ref mut hm) = *opt { //open option
             let mut val: Option<&mut HashMap<String, Data>> = hm.get_mut(&broker);
@@ -13,9 +12,10 @@ pub fn refresh_bidask(broker: String, mut bidask: &BidaskRegistry, bidaskt: &Bid
                 let fetched = Universal::fetch_bidask(&broker);
                 update_data(&broker, vv, &fetched);
                 let text = hm_to_text(vv);
-
                 update_bidasktext(&broker, text, bidaskt);
                 //*vv=hm;
+            }else{
+                println!("err read hashmap val for {}", broker)
             }
         } else {
             println!("err cannot open option bidask {}", broker)
