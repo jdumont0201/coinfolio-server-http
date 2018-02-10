@@ -18,6 +18,7 @@ mod ServeHTTP;
 mod RefreshData;
 mod middlewares;
 mod Brokers;
+mod definitions;
 
 //SPECIFY NAMESPACES
 use iron::{Chain, Request, Iron};
@@ -46,6 +47,10 @@ type BidaskTextRegistry = Arc<Mutex<Option<HashMap<String, String>>>>;
 
 //MAIN
 fn main() {
+    let mut DICTIONARY=definitions::generateReference();
+    let m=DICTIONARY.rawNameToUniversalName("bitfinex".to_string(),"tBTCUSD".to_string());
+    println!("{}",m);
+
     //THREADS VECTOR
     let mut children = vec![];
 
@@ -54,42 +59,23 @@ fn main() {
     let mut R:DataRegistry= HashMap::new();
     let mut RT:TextRegistry= HashMap::new();
     //HASHMAP OF DATA  broker -> Data
-    //let mut ae: hMap<String, RegistryData>> = HashMap::new();
     for i in 0..BROKERS.len() {
-        //ae.insert(BROKERS[i].to_string(), HashMap::new());
         let mut aei: HashMap<String, RegistryData> = HashMap::new();
         let mut aeit: String="".to_string();
         R.insert(BROKERS[i].to_string(),Arc::new(RwLock::new(aei)));
         RT.insert(BROKERS[i].to_string(),Arc::new(RwLock::new(aeit)));
     }
-    //let mut data_registry: BidaskRegistry = Arc::new(Mutex::new(Some(ae)));
-    //let mut data_readonly_registry: BidaskReadOnlyRegistry  = Arc::new(RwLock::new(Some((*data_registry.lock().unwrap()).unwrap())));
 
-    //HASHMAP OF DATA  broker -> formatted string ready to serve through http
-    /*let mut aet: HashMap<String, String> = HashMap::new();
-    for i in 0..BROKERS.len() {
-        aet.insert(BROKERS[i].to_string(), "".to_string());
-    }
-    let mut text_registry: BidaskTextRegistry = Arc::new(Mutex::new(Some(aet)));
-*/
-    //READONLY
-
-
-
-
-
-    //"http server" thread
+    //some clones to feed the threads...
     let RT2 = RT.clone();
     let RT3 = RT.clone();
     let R2 = R.clone();
     let R3 = R.clone();
     let R4 = R.clone();
     let R5 = R.clone();
-
-
     let registry5 = R.clone();
-    //let roregistry5 = data_readonly_registry.clone();
     let RT4 = RT.clone();
+
     children.push(thread::spawn(move || {
         start_http_server(&RT2,&R2);
     }));
@@ -105,7 +91,8 @@ fn main() {
     children.push(thread::spawn(move || {
         Universal::listen_ws_depth(TASK::WS_DEPTH, BROKER::BINANCE,"ethusdt".to_string(),&R4);
     }));
-    //keep open while threads run
+
+    //stay open while threads run
     for child in children {
         let _ = child.join();
     }
@@ -154,11 +141,11 @@ fn start_datarefresh_thread(R: &DataRegistry, RT: &TextRegistry) {
             let R2 = R.clone();
             let RT2 = RT.clone();
             let e = getEnum(BROKERS[i].to_string()).unwrap();
-            thread::spawn(move || { RefreshData::refresh_bidask(e, &R2, &RT2); });
+            thread::spawn(move || { RefreshData::fetch_and_write_bidask(e, &R2, &RT2); });
         }
         thread::sleep(std::time::Duration::new(2, 0));
         let e = getEnum("binance".to_string()).unwrap();
-        RefreshData::refresh_price(e, R, RT);
+        RefreshData::fetch_and_write_price(e, R, RT);
     }));
     loop {
         sched.tick();

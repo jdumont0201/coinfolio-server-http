@@ -4,7 +4,7 @@ use std::collections::HashMap;
 use serde_json;
 use Brokers::BROKER;
 use Universal::DepthData;
-use RefreshData::refresh_depth;
+use RefreshData;
 use DataRegistry;
 use ws::{listen, connect, Handshake, Handler, Sender, Result as wsResult, Message, CloseCode};
 
@@ -148,17 +148,20 @@ impl Handler for WSDepthClient {
     fn on_message(&mut self, msg: Message) -> wsResult<()> {
         let mmm = msg.to_string();
         let mmm = str::replace(&mmm, ",[]", "");
-//        println!("WS depth msg {}", NAME);
         let mm: Result<WSDepth, serde_json::Error> = serde_json::from_str(&mmm);
         match mm {
             Ok(mm_) => {
-  //              println!("NEW P {:?} {:?}", mm_.asks,mm_.bids);
-                let D = DepthData { bids: Some(mm_.bids), asks: Some(mm_.asks) };
-                refresh_depth(self.broker, &self.registry, self.symbol.to_string(), D)
-            }
-            Err(err) => {
-                println!("cannot unmarshal {} ws depth {}", NAME, err)
-            }
+                let c=mm_.bids.clone();
+                let c2=mm_.bids.clone();
+                let a=mm_.asks.clone();
+                let a2=mm_.asks.clone();
+                let D = DepthData { bids: Some(c), asks: Some(a) };
+                RefreshData::refresh_depth(self.broker, &self.registry, self.symbol.to_string(), D);
+
+                let D = Data { bid: Some(c2[0][0].clone()), ask: Some(a2[0][0].clone()),last:None };
+                RefreshData::refresh_price(self.broker, &self.registry, self.symbol.to_string(), D)
+
+            }  Err(err) => {                println!("cannot unmarshal {} ws depth {}", NAME, err)            }
         }
 
         Ok(())

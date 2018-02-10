@@ -10,63 +10,74 @@ use Brokers::{BROKER, getKey};
 
 
 //opens the shared data structure for updating bidask
-pub fn refresh_bidask(broker: BROKER, mut R: &DataRegistry, RT: &TextRegistry) {
+pub fn fetch_and_write_bidask(broker: BROKER,  R: &DataRegistry, RT: &TextRegistry) {
     let key = getKey(broker);
     let fetched = Universal::fetch_bidask(broker);
     let RB = R.get(&key).unwrap();
     if let Ok(mut hm) = RB.write() {
         let mut r: &mut HashMap<String, RegistryData> = &mut *hm;
 
-        update_bidasklast_data(broker, r, &fetched);
+        write_bidasklast_data(broker, r, &fetched);
         let text = hm_to_text(r);
-        update_bidasktext(broker, text, RT);
+        write_bidasktext(broker, text, RT);
     } else { println!("err read hashmap val for {}", broker) }
 }
 
 //opens the shared data structure for updating price
-pub fn refresh_price(broker: BROKER, mut R: &DataRegistry, RT: &TextRegistry) {
+pub fn fetch_and_write_price(broker: BROKER,  R: &DataRegistry, RT: &TextRegistry) {
     let key = getKey(broker);
     let fetched = Universal::fetch_price(broker);
     let RB = R.get(&key).unwrap();
     if let Ok(mut hm) = RB.write() {
         let mut r: &mut HashMap<String, RegistryData> = &mut *hm;
-        update_bidasklast_data(broker, r, &fetched);
+        write_bidasklast_data(broker, r, &fetched);
         let text = hm_to_text(r);
-        update_bidasktext(broker, text, RT);
+        write_bidasktext(broker, text, RT);
     } else { println!("err read hashmap val for {}", broker) }
 }
 
-pub fn refresh_depth(broker: BROKER, mut R: &DataRegistry, symbol: String, data: DepthData) {
+pub fn refresh_depth(broker: BROKER,  R: &DataRegistry, symbol: String, data: DepthData) {
     let key = getKey(broker);
     let RB = R.get(&key).unwrap();
     if let Ok(mut hm) = RB.write() {
         let mut r: &mut HashMap<String, RegistryData> = &mut *hm;
-        write_depth_data(broker, r, symbol.to_uppercase(), data)
+        write_depth_data_item(broker, r, symbol.to_uppercase(), data)
+    } else { println!("err cannot open option bidask {}", broker) }
+}
+pub fn refresh_price(broker: BROKER, mut R: &DataRegistry, symbol: String, data: Data) {
+    let key = getKey(broker);
+    let RB = R.get(&key).unwrap();
+    if let Ok(mut hm) = RB.write() {
+        let mut r: &mut HashMap<String, RegistryData> = &mut *hm;
+        write_bidasklast_data_item(broker, r, symbol.to_uppercase(), &data)
     } else { println!("err cannot open option bidask {}", broker) }
 }
 
 //inserts fresh data into the shared structure content
-pub fn write_bidasklast_data(broker: BROKER, mut persistent: &mut HashMap<String, RegistryData>, fetched: &HashMap<String, Data>) {
+pub fn write_bidasklast_data_item(broker: BROKER, persistent: &mut HashMap<String, RegistryData>, symbol:String,data: &Data) {
+    let mut insert: bool = false;
+    match persistent.get_mut(&symbol) {
+        Some(ref mut d) => {
+            if data.last.is_some() { d.last = data.last.clone(); }
+            if data.ask.is_some() { d.ask = data.ask.clone(); }
+            if data.bid.is_some() { d.bid = data.bid.clone(); }
+        }
+        None => {
+            insert = true;
+        }
+    }
+    if insert {
+        persistent.insert(symbol.to_string(), RegistryData { last: data.last.clone(), ask: data.ask.clone(), bid: data.bid.clone(), asks: Some(vec![]), bids: Some(vec![]) });
+    }
+}
+pub fn write_bidasklast_data(broker: BROKER, persistent: &mut HashMap<String, RegistryData>, fetched: &HashMap<String, Data>) {
     for (symbol, ref data) in fetched.iter() {
-        let mut insert: bool = false;
-        match persistent.get_mut(symbol) {
-            Some(ref mut d) => {
-                if data.last.is_some() { d.last = data.last.clone(); }
-                if data.ask.is_some() { d.ask = data.ask.clone(); }
-                if data.bid.is_some() { d.bid = data.bid.clone(); }
-            }
-            None => {
-                insert = true;
-            }
-        }
-        if insert {
-            persistent.insert(symbol.to_string(), RegistryData { last: data.last.clone(), ask: data.ask.clone(), bid: data.bid.clone(), asks: Some(vec![]), bids: Some(vec![]) });
-        }
+        write_bidasklast_data_item(broker,persistent,symbol.to_string(),data);
     }
 }
 
 //inserts fresh data into the shared structure content
-pub fn write_depth_data(broker: BROKER, mut persistent: &mut HashMap<String, RegistryData>, symbol: String, data: DepthData) {
+pub fn write_depth_data_item(broker: BROKER, persistent: &mut HashMap<String, RegistryData>, symbol: String, data: DepthData) {
     let mut insert: bool = false;
     match persistent.get_mut(&symbol) {
         Some(ref mut d) => {
