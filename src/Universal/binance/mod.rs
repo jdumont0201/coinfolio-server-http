@@ -4,7 +4,6 @@ use serde_json;
 
 use ws::{listen, connect, Handshake, Handler, Sender, Result as wsResult, Message, CloseCode};
 
-
 static NAME: &str = "binance";
 pub static URL_HTTP_BIDASK: &str = "https://api.binance.com/api/v1/ticker/bookTicker";
 pub static URL_HTTP_PRICE: &str = "https://api.binance.com/api/v3/ticker/price";
