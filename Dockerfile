@@ -6,8 +6,8 @@ EXPOSE 8080
 
 ENV appname server-http
 
-RUN mkdir /coinfolio && mkdir /coinfolio/${appname}
-ADD target/release/server-http /coinfolio/${appname}
+RUN mkdir /coinamics && mkdir /coinamics/${appname}
+ADD target/release/server-http /coinamics/${appname}
 
-RUN chmod 777 /coinfolio/${appname}/server-http
-CMD exec /coinfolio/${appname}/server-http
+RUN chmod 777 /coinamics/${appname}/server-http
+CMD exec /coinamics/${appname}/server-http
