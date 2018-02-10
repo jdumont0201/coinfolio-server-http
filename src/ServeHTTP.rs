@@ -74,9 +74,7 @@ pub fn get_pair(req: &mut Request, R: &DataRegistry) -> IronResult<Response> {
         if let Ok(hm) = RB.read() {
             //if let Some(ref hm) = *opt { //open option
             println!("getp open");
-
-           println!("getp {}", key);
-
+            println!("getp {}", key);
             println!("getp {} ok", key);
             let Q: Option<&RegistryData> = hm.get(&pair.to_string());
             match Q {

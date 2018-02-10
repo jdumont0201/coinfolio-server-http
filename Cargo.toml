@@ -16,3 +16,7 @@ persistent = "*"
 reqwest="*"
 job_scheduler="*"
 hyper="*"
+
+[dependencies.ws]
+version = "*"
+features = ["ssl"]
