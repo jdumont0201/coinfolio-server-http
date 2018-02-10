@@ -1,7 +1,11 @@
-use Data;
+use std;use Data;
 use std::collections::HashMap;
-use serde_json;
 
+use serde_json;
+use Brokers::BROKER;
+use Universal::DepthData;
+use RefreshData::refresh_depth;
+use BidaskRegistry;
 use ws::{listen, connect, Handshake, Handler, Sender, Result as wsResult, Message, CloseCode};
 
 static NAME: &str = "binance";
@@ -71,13 +75,13 @@ pub struct WSTick_in_in {
     B: String,
 }
 
+//WS DEPTH
 #[derive(Serialize, Deserialize)]
 pub struct WSDepth {
     pub lastUpdateId: u64,
     pub bids: Vec<Vec<String>>,
     pub asks: Vec<Vec<String>>,
 }
-
 
 //WS TICK CLIENT
 pub struct WSTickClient {
@@ -131,22 +135,26 @@ impl Handler for WSTickClient {
 //WS DEPTH CLIENT
 pub struct WSDepthClient {
     pub out: Sender,
+    pub broker: BROKER,
+    pub registry: BidaskRegistry,
+    pub symbol: String,
 }
 
 impl Handler for WSDepthClient {
     fn on_open(&mut self, _: Handshake) -> wsResult<()> {
-        println!("WS open {}", NAME);
+        println!("WS open {} {}", NAME,self.symbol);
         Ok(())
     }
     fn on_message(&mut self, msg: Message) -> wsResult<()> {
         let mmm = msg.to_string();
-
-        let mmm=str::replace(&mmm,",[]","");
-        println!("WS msg {} {}", NAME, mmm);
+        let mmm = str::replace(&mmm, ",[]", "");
+//        println!("WS depth msg {}", NAME);
         let mm: Result<WSDepth, serde_json::Error> = serde_json::from_str(&mmm);
         match mm {
             Ok(mm_) => {
-                println!("NEW P {}", mm_.lastUpdateId)
+  //              println!("NEW P {:?} {:?}", mm_.asks,mm_.bids);
+                let D = DepthData { bids: Some(mm_.bids), asks: Some(mm_.asks) };
+                refresh_depth(self.broker, &self.registry, self.symbol.to_string(), D)
             }
             Err(err) => {
                 println!("cannot unmarshal {} ws depth {}", NAME, err)

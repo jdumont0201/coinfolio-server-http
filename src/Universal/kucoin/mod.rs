@@ -3,7 +3,7 @@ use std::collections::HashMap;
 use serde_json;
 
 static NAME:&str="kucoin";
-pub static URL_HTTP_BIDASK:&str="https://api.kucoin.com/v1/open/tick"
+pub static URL_HTTP_BIDASK:&str="https://api.kucoin.com/v1/open/tick";
 
 #[derive(Serialize, Deserialize)]
 pub struct Bidask {
