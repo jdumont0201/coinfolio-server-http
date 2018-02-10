@@ -3,6 +3,7 @@ use std::collections::HashMap;
 use serde_json;
 
 static NAME:&str="kraken";
+pub static URL_HTTP_BIDASK:&str="https://api.kraken.com/0/public/Ticker?pair=BCHUSD,BCHXBT,DASHUSD,DASHXBT,EOSXBT,GNOXBT,USDTZUSD,XETCXXBT,XETCZUSD,XETHXXBT,XETHZUSD,XETHZUSD.d,XICNXXBT,XLTCXXBT,XLTCZUSD,XMLNXXBT,XREPXXBT,XXBTZCAD,XXBTZCAD.d,XXBTZUSD,XXBTZUSD.d,XXDGXXBT,XXLMXXBT,XXMRXXBT,XXMRZUSD,XXRPXXBT,XXRPZUSD,XZECXXBT,XZECZUSD";
 
 #[derive(Serialize, Deserialize)]
 pub struct Bidask {
@@ -24,7 +25,7 @@ pub struct kraken_bidask_in {
 }
 
 
-pub fn get_bidask(text:String) -> HashMap<String,Data>{
+pub fn parse_bidask(text:String) -> HashMap<String,Data>{
 
     let mut r = HashMap::new();
     let bs: Result<Bidask, serde_json::Error> = serde_json::from_str(&text);

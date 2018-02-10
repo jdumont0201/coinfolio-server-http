@@ -1,3 +1,5 @@
+use std::error::Error;
+use std;
 use BidaskRegistry;
 use BidaskTextRegistry;
 use Universal::Data;
@@ -6,6 +8,7 @@ use Universal::DepthData;
 use std::collections::HashMap;
 
 
+//opens the shared data structure for updating bidask
 pub fn refresh_bidask(broker: String, mut bidask: &BidaskRegistry, bidaskt: &BidaskTextRegistry) {
     if let Ok(mut opt) = bidask.lock() {
         if let Some(ref mut hm) = *opt { //open option
@@ -16,17 +19,12 @@ pub fn refresh_bidask(broker: String, mut bidask: &BidaskRegistry, bidaskt: &Bid
                 let text = hm_to_text(vv);
                 update_bidasktext(&broker, text, bidaskt);
                 //*vv=hm;
-            }else{
-                println!("err read hashmap val for {}", broker)
-            }
-        } else {
-            println!("err cannot open option bidask {}", broker)
-        }
-    } else {
-        println!("err cannot lock arcmutex bidask {}", broker)
-    }
+            } else { println!("err read hashmap val for {}", broker) }
+        } else { println!("err cannot open option bidask {}", broker) }
+    } else { println!("err cannot lock arcmutex bidask {}", broker) }
 }
 
+//opens the shared data structure for updating price
 pub fn refresh_price(broker: String, mut bidask: &BidaskRegistry, bidaskt: &BidaskTextRegistry) {
     if let Ok(mut opt) = bidask.lock() {
         if let Some(ref mut hm) = *opt { //open option
@@ -37,12 +35,12 @@ pub fn refresh_price(broker: String, mut bidask: &BidaskRegistry, bidaskt: &Bida
                 let text = hm_to_text(vv);
                 update_bidasktext(&broker, text, bidaskt);
                 //*vv=hm;
-            } else {}
-        } else {}
-    }
+            } else { println!("err read hashmap val for {}", broker) }
+        } else { println!("err cannot open option bidask {}", broker) }
+    } else { println!("err cannot lock arcmutex bidask {}", broker) }
 }
 
-//updates the arc mutex
+//inserts fresh data into the shared structure content
 pub fn update_data(broker: &String, mut persistent: &mut HashMap<String, Data>, fetched: &HashMap<String, Data>) {
     for (symbol, ref data) in fetched.iter() {
         let mut insert: bool = false;

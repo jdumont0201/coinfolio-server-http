@@ -1,5 +1,6 @@
 //LOAD EXTERNAL MODULES
 extern crate iron;
+extern crate ws;
 extern crate time;
 extern crate hyper;
 extern crate router;
@@ -12,7 +13,7 @@ extern crate reqwest;
 extern crate job_scheduler;
 
 //SPECIFY NAMESPACES
-use iron::prelude::*;
+use iron::{Chain,Request,Iron};
 use iron::{BeforeMiddleware, AfterMiddleware, typemap};
 use time::precise_time_ns;
 use std::thread;
@@ -32,6 +33,14 @@ mod ServeHTTP;
 mod RefreshData;
 mod middlewares;
 
+pub enum TASK{
+    HTTP_PRICE,
+    HTTP_BIDASK,
+    HTTP_DEPTH,
+    WS_TICK,
+    WS_TRADE,
+    WS_DEPTH
+}
 //TYPES FOR SHARED STRUCTURES ACROSS THREADS
 type BidaskRegistry = Arc<Mutex<Option<HashMap<String, HashMap<String, Data>>>>>;
 type BidaskTextRegistry = Arc<Mutex<Option<HashMap<String, String>>>>;
@@ -69,6 +78,9 @@ fn main() {
         start_datarefresh_thread(&data_registry, &text_registry);
     }));
 
+    children.push(thread::spawn(move || {
+        Universal::listen_ws_depth(TASK::WS_DEPTH,"binance".to_string());
+    }));
     //keep open while threads run
     for child in children {
         let _ = child.join();
@@ -115,6 +127,7 @@ fn start_datarefresh_thread(data_registry: &BidaskRegistry, text_registry: &Bida
         }
 
 
+
         thread::sleep(std::time::Duration::new(2, 0));
         RefreshData::refresh_price("binance".to_string(), data_registry, text_registry);
     }));
@@ -122,4 +135,5 @@ fn start_datarefresh_thread(data_registry: &BidaskRegistry, text_registry: &Bida
         sched.tick();
         std::thread::sleep(std::time::Duration::from_millis(500));
     }
+
 }

@@ -3,6 +3,7 @@ use std::collections::HashMap;
 use serde_json;
 
 static NAME:&str="hitbtc";
+pub static URL_HTTP_BIDASK:&str="https://api.hitbtc.com/api/2/public/ticker";
 
 #[derive(Serialize, Deserialize)]
 pub struct Bidask {
@@ -19,7 +20,7 @@ pub struct Bidask {
 }
 
 
-pub fn get_bidask(text:String) -> HashMap<String,Data>{
+pub fn parse_bidask(text:String) -> HashMap<String,Data>{
     let mut r = HashMap::new();
 
     let bs: Result<Vec<Bidask>, serde_json::Error> = serde_json::from_str(&text);
