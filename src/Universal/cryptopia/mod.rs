@@ -3,6 +3,7 @@ use std::collections::HashMap;
 use serde_json;
 
 static NAME:&str="cryptopia";
+pub static URL_HTTP_BIDASK:&str="https://www.cryptopia.co.nz/api/GetMarkets";
 
 #[derive(Serialize, Deserialize)]
 pub struct Bidask {
@@ -33,7 +34,7 @@ pub struct cryptopia_bidask_in {
 }
 
 
-pub fn get_bidask(text:String) -> HashMap<String,Data>{
+pub fn parse_bidask(text:String) -> HashMap<String,Data>{
     let mut r = HashMap::new();
     let bs: Result<Bidask, serde_json::Error> = serde_json::from_str(&text);
     match bs {

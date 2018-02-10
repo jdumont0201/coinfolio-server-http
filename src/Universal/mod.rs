@@ -1,7 +1,17 @@
+use ws::connect;
 use serde_json;
 use reqwest;
+use RefreshData;
 use std::collections::HashMap;
-
+use Brokers::{BROKER,getKey,TASK};
+use DataRegistry;
+pub struct RegistryData{
+    pub bid: Option<String>,
+    pub ask: Option<String>,
+    pub last: Option<String>,
+    pub bids:Option<Vec<Vec<String>>>,
+    pub asks:Option<Vec<Vec<String>>>
+}
 pub struct Data {
     pub bid: Option<String>,
     pub ask: Option<String>,
@@ -9,9 +19,8 @@ pub struct Data {
 }
 
 pub struct DepthData {
-    pub bids: Vec<Vec<f64>>,
-    pub asks: Vec<Vec<f64>>,
-
+    pub bids: Option<Vec<Vec<String>>>,
+    pub asks: Option<Vec<Vec<String>>>,
 }
 
 mod binance;
@@ -21,62 +30,64 @@ mod cryptopia;
 mod kucoin;
 mod kraken;
 
+type RawHTTPResponse = String;
 
-
-fn get_generic_hashmap(task: String, broker: String, text: String) -> HashMap<String, Data> {
-    if task == "bidask" {
-        if broker == "bitfinex" {
-            bitfinex::get_bidask(text)
-        } else if broker == "binance" {
-            binance::get_bidask(text)
-        } else if broker == "hitbtc" {
-           hitbtc::get_bidask(text)
-        } else if broker == "cryptopia" {
-            cryptopia::get_bidask(text)
-        } else if broker == "kucoin" {
-            kucoin::get_bidask(text)
-        } else if broker == "kraken" {
-            kraken::get_bidask(text)
-        }else{
+fn parse_response(task: TASK, broker: BROKER, text: RawHTTPResponse) -> HashMap<String, Data> {
+    match task {
+        TASK::HTTP_BIDASK => {
+            match broker {
+                BROKER::BITFINEX => { bitfinex::parse_bidask(text) }
+                BROKER::HITBTC => { hitbtc::parse_bidask(text) }
+                BROKER::CRYPTOPIA => { cryptopia::parse_bidask(text) }
+                BROKER::KRAKEN => { kraken::parse_bidask(text) }
+                BROKER::KUCOIN => { kucoin::parse_bidask(text) }
+                BROKER::BINANCE => { binance::parse_bidask(text) }
+                _ => { HashMap::new() }
+            }
+        }
+        TASK::HTTP_PRICE => {
+            match broker {
+                BROKER::BINANCE => { binance::parse_price(text) }
+                _ => { HashMap::new() }
+            }
+        }
+        _ => {
             HashMap::new()
         }
-    } else if task == "price" {
-        if broker == "binance" {
-            binance::get_price(text)
-        }else{
-            HashMap::new()
-        }
-    }else{
-        HashMap::new()
     }
-
 }
 
-fn get_generic_depth_hashmap(task: String, broker: String, text: String) -> String {
+fn parse_response_depth(task: TASK, broker: BROKER, text: String) -> String {
     let mut r: String = "".to_string();
-    if task == "depth" {
-        if broker == "binance" {
-            let text2 = str::replace(&text, ",[]", "");
+    match task {
+        TASK::HTTP_DEPTH => {
+            match broker {
+                BROKER::BINANCE => {
+                    let text2 = str::replace(&text, ",[]", "");
 
-            r = text2;
+                    r = text2;
+                }
+                _ => {}
+            }
         }
+        _ => {}
     }
     r
 }
 
-pub fn fetch_bidask(broker: &String) -> HashMap<String, Data> {
-    let url = get_url("bidask".to_string(), broker);
+pub fn fetch_bidask(broker: BROKER) -> HashMap<String, Data> {
+    let url = get_url(TASK::HTTP_BIDASK, broker, "".to_string());
     //println!("fetch bidask {} {}", broker,url);
     let mut result: HashMap<String, Data>;
     if let Ok(mut res) = reqwest::get(&url) {
         let getres = match res.text() {
             Ok(val) => {
-                let v = get_generic_hashmap("bidask".to_string(), broker.to_string(), val);
-      //          println!("fetch bidask {} : get ok", broker);
+                let v = parse_response(TASK::HTTP_BIDASK, broker, val);
+                //          println!("fetch bidask {} : get ok", broker);
                 result = v;
             }
             Err(err) => {
-                println!("[GET_BIDASK] err");
+                println!("[parse_bidask] err");
                 result = HashMap::new();
             }
         };
@@ -86,15 +97,14 @@ pub fn fetch_bidask(broker: &String) -> HashMap<String, Data> {
     result
 }
 
-
-pub fn fetch_depth(broker: &String, pair: &String) -> String {
+pub fn fetch_depth(broker: BROKER, pair: &String) -> String {
     //println!("fetch string {}", broker);
-    let url = format!("{}{}", get_url("depth".to_string(), broker), pair);
+    let url = format!("{}{}", get_url(TASK::HTTP_DEPTH, broker  , "".to_string()), pair);
     let mut result: String;
     if let Ok(mut res) = reqwest::get(&url) {
         let getres = match res.text() {
             Ok(val) => {
-                let v = get_generic_depth_hashmap("depth".to_string(), broker.to_string(), val);
+                let v = parse_response_depth(TASK::HTTP_DEPTH, broker, val);
                 println!("{} {}", broker, broker);
                 result = v;
             }
@@ -109,15 +119,14 @@ pub fn fetch_depth(broker: &String, pair: &String) -> String {
     result
 }
 
-pub fn fetch_price(broker: &String) -> HashMap<String, Data> {
+pub fn fetch_price(broker: BROKER) -> HashMap<String, Data> {
     //println!("fetch price {}",broker);
-    let url = get_url("price".to_string(), &broker);
-
+    let url = get_url(TASK::HTTP_PRICE,broker, "".to_string());
     let mut result: HashMap<String, Data>;
     if let Ok(mut res) = reqwest::get(&url) {
         let getres = match res.text() {
             Ok(val) => {
-                let v = get_generic_hashmap("price".to_string(), broker.to_string(), val);
+                let v = parse_response(TASK::HTTP_PRICE, broker, val);
                 result = v;
             }
             Err(err) => {
@@ -131,32 +140,79 @@ pub fn fetch_price(broker: &String) -> HashMap<String, Data> {
     result
 }
 
-fn get_url(task: String, broker: &String) -> String {
+pub fn listen_ws_tick(task: TASK, broker: BROKER) {
+    let url = get_url(task, broker, "ethusdt".to_string());
+    println!("listen url {} {}", broker, url);
+    match broker {
+        BROKER::BINANCE => {
+            match connect(url.to_string(), |out| binance::WSTickClient { out: out }) {
+                Ok(c) => { println!("connected"); }
+                Err(err) => { println!("WS Cannot connect {} {}", broker, url) }
+            }},
+            _ => { println ! ("err unknown broker"); }
+
+    }
+}
+
+pub fn listen_ws_depth(task: TASK, broker: BROKER,symbol:String,registry:&DataRegistry) {
+    let url = get_url(task, broker, symbol.to_string());
+    println!("listen url {} {}", broker, url);
+    match broker {
+        BROKER::BINANCE => {
+            match connect(url.to_string(), |out| binance::WSDepthClient { out: out,broker:broker,symbol:symbol.to_string(),registry:registry.clone() }) {
+                Ok(c) => { println!("connected"); }
+                Err(err) => { println!("WS Cannot connect {} {}", broker, url) }
+            }
+        }
+        _ => { println!("err unknown broker"); }
+    }
+}
+
+fn get_url(task: TASK, broker: BROKER, symbol: String) -> String {
     let mut r = "".to_string();
-    if task == "bidask" {
-        if broker == "binance" {
-            r = "https://api.binance.com/api/v1/ticker/bookTicker".to_string();
-        } else if broker == "hitbtc" {
-            r = "https://api.hitbtc.com/api/2/public/ticker".to_string();
-        } else if broker == "kraken" {
-            r = "https://api.kraken.com/0/public/Ticker?pair=BCHUSD,BCHXBT,DASHUSD,DASHXBT,EOSXBT,GNOXBT,USDTZUSD,XETCXXBT,XETCZUSD,XETHXXBT,XETHZUSD,XETHZUSD.d,XICNXXBT,XLTCXXBT,XLTCZUSD,XMLNXXBT,XREPXXBT,XXBTZCAD,XXBTZCAD.d,XXBTZUSD,XXBTZUSD.d,XXDGXXBT,XXLMXXBT,XXMRXXBT,XXMRZUSD,XXRPXXBT,XXRPZUSD,XZECXXBT,XZECZUSD".to_string()
-        } else if broker == "kucoin" {
-            r = "https://api.kucoin.com/v1/open/tick".to_string()
-        } else if broker == "cryptopia" {
-            r = "https://www.cryptopia.co.nz/api/GetMarkets".to_string()
-        } else if broker == "bitfinex" {
-            r = "https://api.bitfinex.com/v2/tickers?symbols=tBTCUSD,tLTCUSD,tLTCBTC,tETHUSD,tETHBTC,tETCBTC,tETCUSD,tRRTUSD,tRRTBTC,tZECUSD,tZECBTC,tXMRUSD,tXMRBTC,tDSHUSD,tDSHBTC,tBTCEUR,tXRPUSD,tXRPBTC,tIOTUSD,tIOTBTC,tIOTETH,tEOSUSD,tEOSBTC,tEOSETH,tSANUSD,tSANBTC,tSANETH,tOMGUSD,tOMGBTC,tOMGETH,tBCHUSD,tBCHBTC,tBCHETH,tNEOUSD,tNEOBTC,tNEOETH,tETPUSD,tETPBTC,tETPETH,tQTMUSD,tQTMBTC,tQTMETH,tAVTUSD,tAVTBTC,tAVTETH,tEDOUSD,tEDOBTC,tEDOETH,tBTGUSD,tBTGBTC,tDATUSD,tDATBTC,tDATETH,tQSHUSD,tQSHBTC,tQSHETH,tYYWUSD,tYYWBTC,tYYWETH,tGNTUSD,tGNTBTC,tGNTETH,tSNTUSD,tSNTBTC,tSNTETH,tIOTEUR,tBATUSD,tBATBTC,tBATETH,tMNAUSD,tMNABTC,tMNAETH,tFUNUSD,tFUNBTC,tFUNETH,tZRXUSD,tZRXBTC,tZRXETH,tTNBUSD,tTNBBTC,tTNBETH,tSPKUSD,tSPKBTC,tSPKETH,tTRXUSD,tTRXBTC,tTRXETH,tRCNUSD,tRCNBTC,tRCNETH,tRLCUSD,tRLCBTC,tRLCETH,tAIDUSD,tAIDBTC,tAIDETH,tSNGUSD,tSNGBTC,tSNGETH,tREPUSD,tREPBTC,tREPETH,tELFUSD,tELFBTC,tELFETH".to_string()
+    match task {
+        TASK::HTTP_BIDASK => {
+            match broker {
+                BROKER::BINANCE => { r = binance::URL_HTTP_BIDASK.to_string(); }
+                BROKER::HITBTC => { r = hitbtc::URL_HTTP_BIDASK.to_string(); }
+                BROKER::KUCOIN => { r = kucoin::URL_HTTP_BIDASK.to_string(); }
+                BROKER::KRAKEN => { r = kraken::URL_HTTP_BIDASK.to_string(); }
+                BROKER::CRYPTOPIA => { r = cryptopia::URL_HTTP_BIDASK.to_string(); }
+                BROKER::BITFINEX => { r = bitfinex::URL_HTTP_BIDASK.to_string(); }
+                _ => {}
+            }
         }
-    } else if task == "price" {
-        if broker == "binance" {
-            r = "https://api.binance.com/api/v3/ticker/price".to_string();
-        } else if broker == "hitbtc" {
-            r = "https://api.hitbtc.com/api/2/public/ticker".to_string();
+        TASK::HTTP_PRICE => {
+            match broker {
+                BROKER::BINANCE => { r = binance::URL_HTTP_PRICE.to_string(); }
+                _ => {}
+            }
         }
-    } else if task == "depth" {
-        if broker == "binance" {
-            r = "https://api.binance.com/api/v1/depth?symbol=".to_string()
+        TASK::HTTP_DEPTH => {
+            match broker {
+                BROKER::BINANCE => { r = binance::URL_HTTP_PRICE.to_string(); }
+                _ => {}
+            }
         }
+        TASK::WS_TICK => {
+            match broker {
+                BROKER::BINANCE => {
+                    r = binance::URL_WS_TICK.to_string();
+                    r = str::replace(&r, "XXX", &symbol)
+                }
+                _ => {}
+            }
+        }
+        TASK::WS_DEPTH => {
+            match broker {
+                BROKER::BINANCE => {
+                    r = binance::URL_WS_DEPTH.to_string();
+                    r = str::replace(&r, "XXX", &symbol)
+                }
+                _ => {}
+            }
+        }
+        _ => {}
     }
     r
 }
