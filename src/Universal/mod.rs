@@ -4,7 +4,7 @@ use reqwest;
 use RefreshData;
 use std::collections::HashMap;
 use Brokers::{BROKER,getKey,TASK};
-use BidaskRegistry;
+use DataRegistry;
 pub struct RegistryData{
     pub bid: Option<String>,
     pub ask: Option<String>,
@@ -154,7 +154,7 @@ pub fn listen_ws_tick(task: TASK, broker: BROKER) {
     }
 }
 
-pub fn listen_ws_depth(task: TASK, broker: BROKER,symbol:String,registry:&BidaskRegistry) {
+pub fn listen_ws_depth(task: TASK, broker: BROKER,symbol:String,registry:&DataRegistry) {
     let url = get_url(task, broker, symbol.to_string());
     println!("listen url {} {}", broker, url);
     match broker {

@@ -10,15 +10,17 @@ use router::{Router, NoRoute};
 use BidaskTextRegistry;
 use BidaskReadOnlyRegistry;
 use BidaskRegistry;
+use DataRegistry;
+use TextRegistry;
 use Brokers::{BROKER, getEnum, TASK, BROKERS};
 
-pub fn target(req: &mut Request, registry: &BidaskRegistry) -> IronResult<Response> {
+pub fn target(req: &mut Request, R: &DataRegistry) -> IronResult<Response> {
     let ref broker: &str = req.extensions.get::<Router>().unwrap().find("broker").unwrap_or("/");
     let ref pair: &str = req.extensions.get::<Router>().unwrap().find("pair").unwrap_or("/");
 
     //let c=thread::spawn(move || {
     if broker.to_string() == "binance" {
-        Universal::listen_ws_depth(TASK::WS_DEPTH, BROKER::BINANCE, pair.to_string().to_lowercase(), &registry.clone());
+        Universal::listen_ws_depth(TASK::WS_DEPTH, BROKER::BINANCE, pair.to_string().to_lowercase(), &R.clone());
     }
     //});
     //c.join();
@@ -41,24 +43,16 @@ pub fn get_depth(req: &mut Request) -> IronResult<Response> {
     Ok(res)
 }
 
-pub fn get_bidask(req: &mut Request, ticker: &BidaskTextRegistry) -> IronResult<Response> {
+pub fn get_bidask(req: &mut Request, RT: &TextRegistry) -> IronResult<Response> {
     let ref broker: &str = req.extensions.get::<Router>().unwrap().find("broker").unwrap_or("/");
     let key: String = broker.to_string();
     let mut val: String = "".to_string();
-    if let Ok(mut opt) = ticker.lock() {
-        if let Some(ref mut hm) = *opt { //open option
-            let key = broker.to_string();
-            match hm.get(&key) {
-                Some(op) => {
-                    val = op.to_string();
-                }
-                None => {
-                    println!("No match for text broker {}", broker)
-                }
-            }
-        } else {
-            println!("Cannot open options {}", broker)
-        }
+    let key = broker.to_string();
+    let RB = RT.get(&key).unwrap();
+    if let Ok(mut st) = RB.read() {
+                val = st.to_string();
+
+
     } else {
         println!("Cannot lock arc {}", broker)
     }
@@ -68,40 +62,41 @@ pub fn get_bidask(req: &mut Request, ticker: &BidaskTextRegistry) -> IronResult<
     Ok(res)
 }
 
-pub fn get_pair(req: &mut Request, ticker: &BidaskRegistry) -> IronResult<Response> {
+pub fn get_pair(req: &mut Request, R: &DataRegistry) -> IronResult<Response> {
     let ref pair: &str = req.extensions.get::<Router>().unwrap().find("pair").unwrap_or("/");
     let mut res: String = "{".to_string();
     let mut first = true;
+
     println!("getp");
-    if let Ok(opt) = ticker.lock() {
-        if let Some(ref hm) = *opt { //open option
+    for i in 0..BROKERS.len() {
+        let key: &str = BROKERS[i];
+        let RB = R.get(key).unwrap();
+        if let Ok(hm) = RB.read() {
+            //if let Some(ref hm) = *opt { //open option
             println!("getp open");
-            for i in 0..BROKERS.len() {
-                let key: &str = BROKERS[i];
-                println!("getp {}", key);
-                let val: Option<&HashMap<String, RegistryData>> = hm.get(key);
-                if let Some(mut vv) = val {
-                    println!("getp {} ok", key);
-                    let Q: Option<&RegistryData> = vv.get(&pair.to_string());
-                    match Q {
-                        Some(qq) => {
-                            println!("getp {} ok w", key);
-                            let sti = hmi_to_text(pair.to_string(), qq, false);
-                            if first {
-                                res = format!("{}\"{}\":{}", res, key, sti);
-                            } else {
-                                res = format!("{},\"{}\":{}", res, key, sti);
-                            }
-                            first = false;
-                        }
-                        None => {}
+
+           println!("getp {}", key);
+
+            println!("getp {} ok", key);
+            let Q: Option<&RegistryData> = hm.get(&pair.to_string());
+            match Q {
+                Some(qq) => {
+                    println!("getp {} ok w", key);
+                    let sti = hmi_to_text(pair.to_string(), qq, false);
+                    if first {
+                        res = format!("{}\"{}\":{}", res, key, sti);
+                    } else {
+                        res = format!("{},\"{}\":{}", res, key, sti);
                     }
-                    //let sti = hmi_to_text(pair.to_string(), vv);
-                    //val = format!("{},{}:{}", val, key, sti);
-                } else { println!("err read hashmap val for {}", pair) }
+                    first = false;
+                }
+                None => {}
             }
+            //let sti = hmi_to_text(pair.to_string(), vv);
+            //val = format!("{},{}:{}", val, key, sti);
         } else { println!("err cannot open option bidask {}", pair) }
-    } else { println!("err cannot lock arcmutex bidask {}", pair) }
+        //} else { println!("err cannot lock arcmutex bidask {}", pair) }
+    }
     res = format!("{}}}", res);
     println!("getp ok d");
     let mut res = Response::with((status::Ok, res));

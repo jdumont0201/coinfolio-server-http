@@ -5,7 +5,7 @@ use serde_json;
 use Brokers::BROKER;
 use Universal::DepthData;
 use RefreshData::refresh_depth;
-use BidaskRegistry;
+use DataRegistry;
 use ws::{listen, connect, Handshake, Handler, Sender, Result as wsResult, Message, CloseCode};
 
 static NAME: &str = "binance";
@@ -136,7 +136,7 @@ impl Handler for WSTickClient {
 pub struct WSDepthClient {
     pub out: Sender,
     pub broker: BROKER,
-    pub registry: BidaskRegistry,
+    pub registry: DataRegistry,
     pub symbol: String,
 }
 
