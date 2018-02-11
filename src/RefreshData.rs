@@ -2,7 +2,8 @@ use std::error::Error;
 use std;
 use DataRegistry;
 use TextRegistry;
-use Universal::{Data, Universal_DepthData, Universal_DepthData_in, RegistryData};
+use OrderbookSide;
+use Universal::{Data, Universal_Orderbook, Universal_Orderbook_in, RegistryData};
 use Universal;
 use ServeHTTP::hm_to_text;
 use std::collections::HashMap;
@@ -59,7 +60,8 @@ pub fn write_bidasklast_data_item(broker: BROKER, persistent: &mut HashMap<Strin
         }
     }
     if insert {
-        persistent.insert(symbol.to_string(), RegistryData { last: data.last.clone(), ask: data.ask.clone(), bid: data.bid.clone(), asks: vec![], bids: vec![] });
+        persistent.insert(symbol.to_string(), RegistryData::new( data.bid.clone(), data.ask.clone(), data.last.clone(), Universal_Orderbook {asks: HashMap::new(), bids: HashMap::new() } ));
+        //persistent.insert(symbol.to_string(), RegistryData { last: data.last.clone(), ask: data.ask.clone(), bid: data.bid.clone(), orderbook: Universal_Orderbook {asks: HashMap::new(), bids: HashMap::new() }});
     }
 }
 
@@ -84,89 +86,83 @@ pub fn write_bidasktext(broker: BROKER, text: String, RT: &TextRegistry) {
 //
 
 //replaces all depth data
-pub fn snapshot_depth(broker: BROKER, R: &DataRegistry, symbol: String, data: Universal_DepthData) {
+pub fn snapshot_depth(broker: BROKER, R: &DataRegistry, pair: String, data: Universal_Orderbook) {
     let key = getKey(broker);
     let RB = R.get(&key).unwrap();
     if let Ok(mut hm) = RB.write() {
         let mut r: &mut HashMap<String, RegistryData> = &mut *hm;
-        write_depth_data_item(broker, r, symbol.to_uppercase(), data)
+        write_depth_data_item(broker, r, pair.to_uppercase(), data)
     } else { println!("err cannot open option bidask {}", broker) }
 }
 
 //updates depth data
-pub fn update_depth(broker: BROKER, R: &DataRegistry, symbol: String, data: Universal_DepthData) {
+pub fn update_depth(broker: BROKER, R: &DataRegistry, pair: String, data: Universal_Orderbook) {
     let key = getKey(broker);
     let RB = R.get(&key).unwrap();
     if let Ok(mut hm) = RB.write() {
         let mut r: &mut HashMap<String, RegistryData> = &mut *hm;
-        write_depth_data_item_for_update(broker, r, symbol.to_uppercase(), data)
+        write_depth_data_item_for_update(broker, r, pair.to_uppercase(), data)
     } else { println!("err cannot open option bidask {}", broker) }
 }
 
 
 //inserts fresh data into the shared structure content
-pub fn write_depth_data_item(broker: BROKER, persistent: &mut HashMap<String, RegistryData>, symbol: String, data: Universal_DepthData) {
+pub fn write_depth_data_item(broker: BROKER, persistent: &mut HashMap<String, RegistryData>, pair: String, data: Universal_Orderbook) {
     let mut insert: bool = false;
-    match persistent.get_mut(&symbol) {
+    match persistent.get_mut(&pair) {
         Some(ref mut d) => {
             //println!("write depth data {} {} found", broker, symbol);
-            d.bids = data.bids.clone();
-            d.asks = data.asks.clone();
+            d.set_bids(data.bids.clone());
+            d.set_asks(data.asks.clone());
         }
         None => {
             insert = true;
         }
     }
     if insert {
-        println!("write depth data {} {} insert {:?}", broker, symbol.to_string().to_uppercase(), data.asks);
-        persistent.insert(symbol.to_string().to_uppercase(), RegistryData { last: None, ask: None, bid: None, asks: data.bids, bids: data.asks });
+
+        //for (price, size) in data.get_bids().iter() {
+            //println!("bids write {}{}",price,size);
+        //}
+        persistent.insert(pair.to_string(), RegistryData::new(None, None,None, Universal_Orderbook  {  asks: data.asks, bids: data.bids } ));
+        //persistent.insert(symbol.to_string().to_uppercase(), RegistryData { last: None, ask: None, bid: None,orderbook:Universal_Orderbook { asks: data.bids, bids: data.asks} });
     }
 }
 
 
 //updates fresh data into the shared structure content
-pub fn write_depth_data_item_for_update(broker: BROKER, persistent: &mut HashMap<String, RegistryData>, pair: String, data: Universal_DepthData) {
+pub fn write_depth_data_item_for_update(broker: BROKER, persistent: &mut HashMap<String, RegistryData>, pair: String, data: Universal_Orderbook) {
     let mut insert: bool = false;
     match persistent.get_mut(&pair) {//if pair in hashmap
         Some(ref mut d) => {
-            println!("update has");
-            update_or_erase_depth_level(&mut d.bids, data.bids.clone());
-            update_or_erase_depth_level(&mut d.asks, data.asks.clone());
+            update_or_erase_depth_level(&mut d.get_bids_mut(), data.bids.clone());
+            update_or_erase_depth_level(&mut d.get_asks_mut(), data.asks.clone());
         }
         None => {
             insert = true;
         }
     }
-    println!("update {:?}", data.bids);
+
     if insert {//should not be run, snapshot should have been run earlier. just in case...
-        persistent.insert(pair.to_string().to_uppercase(), RegistryData { last: None, ask: None, bid: None, asks: data.asks, bids: data.bids });
+        //persistent.insert(pair.to_string().to_uppercase(), RegistryData { last: None, ask: None, bid: None,orderbook:Universal_Orderbook {  asks: data.asks, bids: data.bids }});
+        persistent.insert(pair.to_string(), RegistryData::new(None, None,None, Universal_Orderbook  {  asks: data.asks, bids: data.bids } ));
     }
 }
 
-fn update_or_erase_depth_level(persistent: &mut Vec<Universal_DepthData_in>, received: Vec<Universal_DepthData_in>) {
-    for ref item in received.iter() {
-        if item.size == "0.00" { //delete level
-            //println!("delete size {} {}", item.price, item.size);
-            let mut jval:Option<usize> = None;
-            let mut jindex:usize = 0;
-            for jtem in persistent.iter_mut() {
-                if jtem.price == item.price {
-                    jval=Some(jindex);
-                    break;
-                }
-                jindex=jindex+1;
-            }
-            if jval.is_some() {
-                persistent.remove(jval.unwrap());
-            }
+fn update_or_erase_depth_level(persistent: &mut OrderbookSide, received: OrderbookSide) {
+    for (received_price, received_size) in received {
+        if received_size < 0.00000001 { //delete level
+            persistent.remove(&received_price);
         } else {
-            for ref mut jtem in persistent.iter_mut() {
-                if jtem.price == item.price {
-              //      println!("add set size {} {}", item.price, item.size);
-                    jtem.size = item.size.clone();
-                    break;
+            let mut val:f64=0.;
+            match persistent.get(&received_price) {
+                Some(persistent_size)=>{
+                    val=received_size+persistent_size;
+                },None=>{
+                    val=received_size;
                 }
             }
+            persistent.insert(received_price,val);
         }
     }
 }

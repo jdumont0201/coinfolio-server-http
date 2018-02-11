@@ -1,8 +1,10 @@
 use std::thread;
+use OrderbookSide;
+use std::iter::FromIterator;
 use std::collections::HashMap;
 use iron::{Request, Response, Chain, IronResult, Iron};
 use Universal;
-use Universal::{Data, Universal_DepthData, RegistryData};
+use Universal::{Data, Universal_Orderbook, RegistryData};
 use iron::status;
 
 use iron;
@@ -54,8 +56,7 @@ pub fn get_bidask(req: &mut Request, RT: &TextRegistry) -> IronResult<Response> 
     let mut val: String = "".to_string();
     let key = broker.to_string();
     let RB = RT.get(&key).unwrap();
-    if let Ok(mut st) = RB.read() {
-
+    if let Ok( st) = RB.read() {
         val = st.to_string();
     } else {
         println!("Cannot lock arc {}", broker)
@@ -74,8 +75,6 @@ pub fn get_pair(req: &mut Request, R: &DataRegistry) -> IronResult<Response> {
         let broker: &str = BROKERS[i];
         let RB = R.get(broker).unwrap();
         if let Ok(hm) = RB.read() {
-
-
             let Q: Option<&RegistryData> = hm.get(&pair.to_string());
             match Q {
                 Some(qq) => {
@@ -87,7 +86,8 @@ pub fn get_pair(req: &mut Request, R: &DataRegistry) -> IronResult<Response> {
                     }
                     first = false;
                 }
-                None => { println!("nothing for this pair {} {}",broker, pair);}
+                None => { //println!("nothing for this pair {} {}",broker, pair);
+                }
             }
         } else { println!("err cannot read rwlock {}", pair) }
     }
@@ -111,16 +111,15 @@ pub fn get_infrasupra(req: &mut Request, R: &DataRegistry, DICT: &DictRegistry) 
             let DD: &definitions::Dictionary = &*D;
             let nameopt = DD.infrasupraToRawName(broker, infra, supra);
             if nameopt.is_some() {
-                let pair=nameopt.unwrap();
+                let pair = nameopt.unwrap();
                 if let Ok(hm) = RB.read() {
-                    println!("len {} {}",broker, hm.len());
-                    for key in hm.keys() {
-                        println!("{}", key);
-                    }
                     let Q: Option<&RegistryData> = hm.get(&pair.to_string());
                     match Q {
                         Some(data) => {
-                            println!("{}{}{:?}",broker,pair,data.bids);
+                            for (price, size) in data.get_bids().iter() {
+                                println!("req{}{}",price,size);
+                            }
+                            //println!("{}{}{:?}",broker,pair,data.bids);
                             let sti = hmi_to_text(pair.to_string(), data, false);
                             if first {
                                 res = format!("{}\"{}\":{}", res, broker, sti);
@@ -129,10 +128,10 @@ pub fn get_infrasupra(req: &mut Request, R: &DataRegistry, DICT: &DictRegistry) 
                             }
                             first = false;
                         }
-                        None => { println!("nothing for this pair {} {}",broker,pair);}
+                        None => { println!("nothing for this pair {} {}", broker, pair); }
                     }
                 } else { println!("err cannot open option bidask {}", pair) }
-            } else {  println!("no match {} {} {} ",broker,infra,supra) }
+            } else { println!("no match {} {} {} ", broker, infra, supra) }
         }
     }
     res = format!("{}}}", res);
@@ -174,8 +173,6 @@ pub fn hmi_to_text(symbol: String, data: &RegistryData, showSymbol: bool) -> Str
     let bid: String;
     let ask: String;
     let last: String;
-    let bids: String;
-    let asks: String;
     match data.bid {
         Some(ref b) => { bid = format!("{}", b.to_string()); }
         None => { bid = "null".to_string(); }
@@ -184,17 +181,51 @@ pub fn hmi_to_text(symbol: String, data: &RegistryData, showSymbol: bool) -> Str
         Some(ref b) => { ask = format!("{}", b.to_string()); }
         None => { ask = "null".to_string(); }
     }
-    bids = format!("{:?}", data.bids);
-    asks = format!("{:?}", data.asks);
     match data.last {
         Some(ref b) => { last = format!("{}", b.to_string()); }
         None => { last = "null".to_string(); }
     }
 
-    println!("{} {}",bids,asks);
+  /*  for (price, size) in data.get_bids().iter() {
+        println!("bids noorder{}{}",price,size);
+    }*/
+
+
+
+    let bids = Orderbook_to_string(data.get_bids(), true, true);
+    let asks = Orderbook_to_string(data.get_asks(), true, false);
     if showSymbol {
-        format!("\"{}\":{{\"bid\":{},\"ask\":{},\"last\":{},\"bids\":{},\"asks\":{}}}", symbol, bid, ask, last, bids, asks)
+        format!("\"{}\":{{\"http\":{{\"bid\":{},\"ask\":{},\"last\":{}}},\"ws\":{{\"bids\":{},\"asks\":{}}}}}", symbol, bid, ask, last, bids, asks)
     } else {
-        format!("{{\"bid\":{},\"ask\":{},\"last\":{},\"bids\":{},\"asks\":{}}}", bid, ask, last, bids, asks)
+        format!("{{\"http\":{{\"bid\":{},\"ask\":{},\"last\":{}}},\"ws\":{{\"bids\":{},\"asks\":{}}}}}", bid, ask, last, bids, asks)
     }
 }
+
+fn Orderbook_to_string(orderbook: &OrderbookSide, order: bool, sort_order: bool) -> String {
+    if !order {
+
+        format!("{:?}", orderbook)
+    } else {
+        //put prices in vec to sort
+        let mut v: Vec<(f64, String)> = Vec::new();
+        for (price, size) in orderbook.iter() {
+            v.push((price.parse::<f64>().unwrap(), price.to_string()))
+        }
+        if sort_order {
+            v.sort_by(|&(b, _), &(a, _)| a.partial_cmp(&b).unwrap());
+        } else {
+            v.sort_by(|&(a, _), &(b, _)| a.partial_cmp(&b).unwrap());
+        }
+        //output in order
+        let mut result = "[".to_string();
+        let mut st = "";
+        for price in v.iter() {
+//            println!("tostr {}{}",price.0,orderbook.get(&price.1.to_string()).unwrap());
+            result = format!("{}{}[{},{}]", result, st, price.0, orderbook.get(&price.1.to_string()).unwrap());
+            st = ",";
+        }
+        result = format!("{}]", result);
+        result
+    }
+}
+

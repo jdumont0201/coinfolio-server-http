@@ -6,13 +6,39 @@ use RefreshData;
 use std::collections::HashMap;
 use Brokers::{BROKER, getKey, TASK};
 use DataRegistry;
+use OrderbookSide;
 
 pub struct RegistryData {
     pub bid: Option<String>,
     pub ask: Option<String>,
     pub last: Option<String>,
-    pub bids: HashMap<String,String>,
-    pub asks: HashMap<String,String>,
+    orderbook:Universal_Orderbook
+}
+impl RegistryData{
+    pub fn new(bid:Option<String>,ask:Option<String>,last:Option<String>,orderbook:Universal_Orderbook) -> Self{
+        RegistryData {bid:bid,ask:ask,last:last,orderbook:orderbook}
+    }
+    pub fn get_bids_mut(&mut self) -> &mut OrderbookSide{
+        &mut self.orderbook.bids
+    }
+    pub fn get_bids(&self) -> &OrderbookSide{
+        &self.orderbook.bids
+    }
+    pub fn get_asks_mut(&mut self) -> &mut OrderbookSide{
+        &mut self.orderbook.asks
+    }
+    pub fn get_asks(&self) -> &OrderbookSide{
+        &self.orderbook.asks
+    }
+    pub fn set_bids(&mut self,bids:OrderbookSide){
+        self.orderbook.bids=bids;
+    }
+    pub fn set_asks(&mut self,asks:OrderbookSide){
+        self.orderbook.asks=asks;
+    }
+    pub fn print(&self){
+       println!("{:?}",self.orderbook.bids)
+    }
 }
 
 pub struct Data {
@@ -21,11 +47,28 @@ pub struct Data {
     pub last: Option<String>,
 }
 
-pub struct Universal_DepthData {
-    pub bids: HashMap<String,String>,
-    pub asks: HashMap<String,String>
+pub struct Universal_Orderbook {
+    pub bids: OrderbookSide,
+    pub asks: OrderbookSide
 }
-impl std::fmt::Debug for Universal_DepthData {
+impl Universal_Orderbook{
+    pub fn get_bids_mut(&mut self) -> &OrderbookSide{
+        &self.bids
+    }
+    pub     fn get_bids(&self) -> &OrderbookSide{
+        &self.bids
+    }
+    pub fn get_asks_mut(&mut self) -> &OrderbookSide{
+        &self.asks
+    }
+    pub fn get_asks(&self) -> &OrderbookSide{
+        &self.asks
+    }
+    pub fn print(&self){
+        println!("{:?}",self.bids)
+    }
+}
+impl std::fmt::Debug for Universal_Orderbook {
     fn fmt(&self, fmt: &mut std::fmt::Formatter) -> std::fmt::Result {
         let mut st="";
         try!(fmt.write_str("bids:["));
@@ -49,12 +92,12 @@ impl std::fmt::Debug for Universal_DepthData {
 }
 
 #[derive(Clone)]
-pub struct Universal_DepthData_in {
+pub struct Universal_Orderbook_in {
     pub price: String,
     pub size: String,
 }
 
-impl std::fmt::Debug for Universal_DepthData_in {
+impl std::fmt::Debug for Universal_Orderbook_in {
     fn fmt(&self, fmt: &mut std::fmt::Formatter) -> std::fmt::Result {
             try!(fmt.write_str("["));
             try!(fmt.write_str(&self.price));
@@ -164,7 +207,7 @@ pub fn fetch_depth(broker: BROKER, pair: &String) -> String {
 pub fn fetch_price(broker: BROKER) -> HashMap<String, Data> {
     //println!("fetch price {}",broker);
     let url = get_url(TASK::HTTP_PRICE, broker, "".to_string());
-    let mut result: HashMap<String, Data>;
+    let result: HashMap<String, Data>;
     if let Ok(mut res) = reqwest::get(&url) {
         let getres = match res.text() {
             Ok(val) => {

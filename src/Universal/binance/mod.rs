@@ -1,10 +1,10 @@
 use std;use Data;
 use std::collections::HashMap;
-
+use OrderbookSide;
 use serde_json;
 use Brokers::BROKER;
-use Universal::Universal_DepthData;
-use Universal::Universal_DepthData_in;
+use Universal::Universal_Orderbook;
+use Universal::Universal_Orderbook_in;
 use RefreshData;
 use DataRegistry;
 use ws::{listen, connect, Handshake, Handler, Sender, Result as wsResult, Message, CloseCode};
@@ -152,24 +152,29 @@ impl Handler for WSDepthClient {
         let mm: Result<WSDepth, serde_json::Error> = serde_json::from_str(&mmm);
         match mm {
             Ok(mm_) => {
-                let c=mm_.bids.clone();
-                let a=mm_.asks.clone();
-                let c2=mm_.bids.clone();
-                let a2=mm_.asks.clone();
+                let bid=mm_.bids.clone();
+                let ask=mm_.asks.clone();
 
-                let mut bid_res:Vec<Universal_DepthData_in>=Vec::new();
-                let mut ask_res:Vec<Universal_DepthData_in>=Vec::new();
-                for  ref item  in c.iter(){
-                    bid_res.push(Universal_DepthData_in {price:item[0].clone(),size:item[1].clone()});
+                let mut orderbook_bid: OrderbookSide = HashMap::new();
+                let mut orderbook_ask: OrderbookSide = HashMap::new();
+
+                let mut i=0;
+                for  ref item  in bid.iter(){
+                    i = i + 1;
+                    if i < 10 {
+
+                    orderbook_bid.insert(item[0].clone(),item[1].clone().parse::<f64>().unwrap());
+                    }
                 }
-                for  ref item in c.iter(){
-                    ask_res.push(Universal_DepthData_in {price:item[0].clone(),size:item[1].clone()});
+                let mut i=0;
+                for  ref item in ask.iter(){
+                    i = i + 1;
+                    if i < 2 {
+                        orderbook_ask.insert(item[0].clone(),item[1].clone().parse::<f64>().unwrap());
+                    }
                 }
-                let D = Universal_DepthData { bids: bid_res, asks: ask_res };
+                let D = Universal_Orderbook { bids: orderbook_bid, asks: orderbook_ask };
                 RefreshData::snapshot_depth(self.broker, &self.registry, self.symbol.to_string(), D);
-
-                let D2 = Data { bid: Some(c[0][0].clone()), ask: Some(a[0][0].clone()),last:None };
-                RefreshData::refresh_price(self.broker, &self.registry, self.symbol.to_string(), D2)
 
             }  Err(err) => {                println!("cannot unmarshal {} ws depth {}", NAME, err)            }
         }

@@ -1,3 +1,6 @@
+#![allow(non_snake_case)]
+#![allow(non_camel_case_types)]
+
 //LOAD EXTERNAL MODULES
 extern crate iron;
 extern crate ws;
@@ -31,7 +34,7 @@ use router::{Router, NoRoute};
 use std::collections::HashMap;
 use std::sync::{RwLock ,Arc, Mutex};
 use Universal::fetch_bidask;
-use Universal::{Data,Universal_DepthData,RegistryData};
+use Universal::{Data,Universal_Orderbook,RegistryData};
 use chrono::prelude::*;
 use time::Duration;
 use Brokers::{BROKER,getKey,getEnum,TASK,BROKERS};
@@ -40,7 +43,7 @@ use Brokers::{BROKER,getKey,getEnum,TASK,BROKERS};
 type DataRegistry = HashMap<String,Arc<RwLock<HashMap<String, RegistryData>>>>;
 type TextRegistry = HashMap<String,Arc<RwLock<String>>>;
 type DictRegistry = Arc<RwLock<definitions::Dictionary>>;
-
+type OrderbookSide = HashMap<String,f64>;
 type BidaskRegistry = Arc<Mutex<Option<HashMap<String, HashMap<String, RegistryData>>>>>;
 type BidaskReadOnlyRegistry = Arc<RwLock<Option<HashMap<String, HashMap<String, RegistryData>>>>>;
 type BidaskTextRegistry = Arc<Mutex<Option<HashMap<String, String>>>>;
@@ -49,7 +52,7 @@ type BidaskTextRegistry = Arc<Mutex<Option<HashMap<String, String>>>>;
 
 //MAIN
 fn main() {
-    let mut DICTIONARY=definitions::generateReference();
+    let DICTIONARY=definitions::generateReference();
 
     //THREADS VECTOR
     let mut children = vec![];
@@ -84,20 +87,16 @@ fn main() {
 
     //"update data" threads
     children.push(thread::spawn(move || {
-        //start_datarefresh_thread(&R5, &RT3);
+        start_datarefresh_thread(&R5, &RT3);
     }));
-
     children.push(thread::spawn(move || {
-//        Universal::listen_ws_depth(TASK::WS_DEPTH, BROKER::BINANCE,"btcusdt".to_string(),&R3);
+        Universal::listen_ws_depth(TASK::WS_DEPTH, BROKER::BINANCE,"btcusdt".to_string(),&R3);
 
     }));
     children.push(thread::spawn(move || {
         thread::sleep(std::time::Duration::new(1, 0));
         Universal::listen_ws_depth(TASK::WS_DEPTH, BROKER::HITBTC,"BTCUSD".to_string(),&R6);
 
-    }));
-    children.push(thread::spawn(move || {
-  //      Universal::listen_ws_depth(TASK::WS_DEPTH, BROKER::BINANCE,"ethusdt".to_string(),&R4);
     }));
 
     //stay open while threads run
