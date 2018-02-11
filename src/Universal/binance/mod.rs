@@ -160,18 +160,14 @@ impl Handler for WSDepthClient {
 
                 let mut i=0;
                 for  ref item  in bid.iter(){
-                    i = i + 1;
-                    if i < 10 {
 
                     orderbook_bid.insert(item[0].clone(),item[1].clone().parse::<f64>().unwrap());
-                    }
+
                 }
                 let mut i=0;
                 for  ref item in ask.iter(){
-                    i = i + 1;
-                    if i < 2 {
                         orderbook_ask.insert(item[0].clone(),item[1].clone().parse::<f64>().unwrap());
-                    }
+
                 }
                 let D = Universal_Orderbook { bids: orderbook_bid, asks: orderbook_ask };
                 RefreshData::snapshot_depth(self.broker, &self.registry, self.symbol.to_string(), D);

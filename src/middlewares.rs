@@ -7,7 +7,9 @@ use iron::status;
 
 pub struct ResponseTime;
 impl typemap::Key for ResponseTime { type Value = u64; }
+
 pub struct Custom404;
+
 impl BeforeMiddleware for ResponseTime {
     fn before(&self, req: &mut Request) -> IronResult<()> {
         req.extensions.insert::<ResponseTime>(precise_time_ns());

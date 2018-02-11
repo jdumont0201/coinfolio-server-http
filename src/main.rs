@@ -17,13 +17,15 @@ extern crate job_scheduler;
 
 //LOAD CUSTOM MODULES
 mod Universal;
-mod ServeHTTP;
+mod routes;
 mod RefreshData;
-mod middlewares;
 mod Brokers;
-mod definitions;
-
+mod arbitrage;
+mod dictionary;
+mod middlewares;
+mod ws_server;
 //SPECIFY NAMESPACES
+
 use iron::{Chain, Request, Iron};
 use iron::{BeforeMiddleware, AfterMiddleware, typemap};
 use time::precise_time_ns;
@@ -37,12 +39,13 @@ use Universal::fetch_bidask;
 use Universal::{Data,Universal_Orderbook,RegistryData};
 use chrono::prelude::*;
 use time::Duration;
+use dictionary::{Dictionary,generateReference};
 use Brokers::{BROKER,getKey,getEnum,TASK,BROKERS};
 
 //TYPES FOR SHARED STRUCTURES ACROSS THREADS
 type DataRegistry = HashMap<String,Arc<RwLock<HashMap<String, RegistryData>>>>;
 type TextRegistry = HashMap<String,Arc<RwLock<String>>>;
-type DictRegistry = Arc<RwLock<definitions::Dictionary>>;
+type DictRegistry = Arc<RwLock<Dictionary>>;
 type OrderbookSide = HashMap<String,f64>;
 type BidaskRegistry = Arc<Mutex<Option<HashMap<String, HashMap<String, RegistryData>>>>>;
 type BidaskReadOnlyRegistry = Arc<RwLock<Option<HashMap<String, HashMap<String, RegistryData>>>>>;
@@ -52,7 +55,7 @@ type BidaskTextRegistry = Arc<Mutex<Option<HashMap<String, String>>>>;
 
 //MAIN
 fn main() {
-    let DICTIONARY=definitions::generateReference();
+    let DICTIONARY=generateReference();
 
     //THREADS VECTOR
     let mut children = vec![];
@@ -82,7 +85,7 @@ fn main() {
 
     children.push(thread::spawn(move || {
         let DD:DictRegistry=Arc::new(RwLock::new(DICTIONARY.clone()));
-        start_http_server(&RT2,&R2,&DD);
+        routes::start_http_server(&RT2,&R2,&DD);
     }));
 
     //"update data" threads
@@ -96,46 +99,18 @@ fn main() {
     children.push(thread::spawn(move || {
         thread::sleep(std::time::Duration::new(1, 0));
         Universal::listen_ws_depth(TASK::WS_DEPTH, BROKER::HITBTC,"BTCUSD".to_string(),&R6);
-
     }));
+
+    children.push(thread::spawn(move || {
+        thread::sleep(std::time::Duration::new(1, 0));
+        start_websocket_server();
+    }));
+
+
 
     //stay open while threads run
     for child in children {
         let _ = child.join();
-    }
-}
-
-fn start_http_server(RT: &TextRegistry,R:&DataRegistry,DICT:&DictRegistry) {
-    println!("Coinamics Server HTTP");
-    //create routes
-    let mut router = Router::new();
-    router.get("/", ServeHTTP::handler_simple, "index");
-    router.get("/favicon.ico", ServeHTTP::handler_favicon, "favicon");
-    let RT2 = RT.clone();
-    router.get("/exchange/:broker/price", move |request: &mut Request| ServeHTTP::get_bidask(request, &RT2), "ticker");
-    let R2 = R.clone();
-    router.get("/pair/:pair", move |request: &mut Request| ServeHTTP::get_pair(request, &R2), "pair");
-    let R2b = R.clone();
-
-    let DD2=DICT.clone();
-    router.get("/supra/:supra/infra/:infra", move |request: &mut Request| ServeHTTP::get_infrasupra(request, &R2b,&DD2), "infrasupra");
-    router.get("/exchange/:broker/task/depth/symbol/:pair", move |request: &mut Request| ServeHTTP::get_depth(request), "depth");
-    let R3=R.clone();
-    router.get("/target/:broker/:pair", move |request: &mut Request| ServeHTTP::target(request,&R3), "target");
-
-    //add middlewares
-    let mut chain = Chain::new(router);
-    chain.link_before(middlewares::ResponseTime);
-    chain.link_after(middlewares::ResponseTime);
-    chain.link_after(middlewares::Custom404);
-
-    //listen
-    static HTTP_PORT: i32 = 8080;
-    let address = "0.0.0.0:8080";
-    if let Ok(server) = Iron::new(chain).http(address) {
-        println!("HTTP server listening on {}", address);
-    } else {
-        println!("HTTP server could not connect on {}", address);
     }
 }
 
@@ -159,4 +134,10 @@ fn start_datarefresh_thread(R: &DataRegistry, RT: &TextRegistry) {
         sched.tick();
         std::thread::sleep(std::time::Duration::from_millis(500));
     }
+}
+
+
+fn start_websocket_server(){
+
+    ws::listen("127.0.0.1:3012", |out| { ws_server::Server { out: out } }).unwrap()
 }

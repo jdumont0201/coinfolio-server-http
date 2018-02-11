@@ -16,7 +16,7 @@ pub fn parse_bidask(text:String) -> HashMap<String,Data>{
     let mut r = HashMap::new();
     let text2b = str::replace(&text, "[[", "");
     let text2 = str::replace(&text2b, "]]", "");
-    let mut bs: Vec<&str> = text2.split("],[").collect();
+    let bs: Vec<&str> = text2.split("],[").collect();
     if bs.len() > 0 {
         for row in bs.iter() {
 //println!("row {:?}",row);
