@@ -94,7 +94,7 @@ impl Handler for WSDepthClient {
                             "snapshotOrderbook" => {
                                 let mut i=0;
                                 for item in bid.iter() {
-                                    
+
                                     i=i+1
 
                                 }

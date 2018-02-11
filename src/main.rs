@@ -112,14 +112,14 @@ fn start_http_server(RT: &TextRegistry,R:&DataRegistry,DICT:&DictRegistry) {
     router.get("/", ServeHTTP::handler_simple, "index");
     router.get("/favicon.ico", ServeHTTP::handler_favicon, "favicon");
     let RT2 = RT.clone();
-    router.get("/public/:broker/bidask", move |request: &mut Request| ServeHTTP::get_bidask(request, &RT2), "ticker");
+    router.get("/exchange/:broker/price", move |request: &mut Request| ServeHTTP::get_bidask(request, &RT2), "ticker");
     let R2 = R.clone();
     router.get("/pair/:pair", move |request: &mut Request| ServeHTTP::get_pair(request, &R2), "pair");
     let R2b = R.clone();
 
     let DD2=DICT.clone();
     router.get("/supra/:supra/infra/:infra", move |request: &mut Request| ServeHTTP::get_infrasupra(request, &R2b,&DD2), "infrasupra");
-    router.get("/public/:broker/depth/:pair", move |request: &mut Request| ServeHTTP::get_depth(request), "depth");
+    router.get("/exchange/:broker/task/depth/symbol/:pair", move |request: &mut Request| ServeHTTP::get_depth(request), "depth");
     let R3=R.clone();
     router.get("/target/:broker/:pair", move |request: &mut Request| ServeHTTP::target(request,&R3), "target");
 
