@@ -3,7 +3,8 @@ use std::collections::HashMap;
 
 use serde_json;
 use Brokers::BROKER;
-use Universal::DepthData;
+use Universal::Universal_DepthData;
+use Universal::Universal_DepthData_in;
 use RefreshData;
 use DataRegistry;
 use ws::{listen, connect, Handshake, Handler, Sender, Result as wsResult, Message, CloseCode};
@@ -152,14 +153,23 @@ impl Handler for WSDepthClient {
         match mm {
             Ok(mm_) => {
                 let c=mm_.bids.clone();
-                let c2=mm_.bids.clone();
                 let a=mm_.asks.clone();
+                let c2=mm_.bids.clone();
                 let a2=mm_.asks.clone();
-                let D = DepthData { bids: Some(c), asks: Some(a) };
-                RefreshData::refresh_depth(self.broker, &self.registry, self.symbol.to_string(), D);
 
-                let D = Data { bid: Some(c2[0][0].clone()), ask: Some(a2[0][0].clone()),last:None };
-                RefreshData::refresh_price(self.broker, &self.registry, self.symbol.to_string(), D)
+                let mut bid_res:Vec<Universal_DepthData_in>=Vec::new();
+                let mut ask_res:Vec<Universal_DepthData_in>=Vec::new();
+                for  ref item  in c.iter(){
+                    bid_res.push(Universal_DepthData_in {price:item[0].clone(),size:item[1].clone()});
+                }
+                for  ref item in c.iter(){
+                    ask_res.push(Universal_DepthData_in {price:item[0].clone(),size:item[1].clone()});
+                }
+                let D = Universal_DepthData { bids: bid_res, asks: ask_res };
+                RefreshData::snapshot_depth(self.broker, &self.registry, self.symbol.to_string(), D);
+
+                let D2 = Data { bid: Some(c[0][0].clone()), ask: Some(a[0][0].clone()),last:None };
+                RefreshData::refresh_price(self.broker, &self.registry, self.symbol.to_string(), D2)
 
             }  Err(err) => {                println!("cannot unmarshal {} ws depth {}", NAME, err)            }
         }
@@ -221,5 +231,3 @@ pub fn parse_price(text: String) -> HashMap<String, Data> {
     }
     r
 }
-
-pub fn init_ws_price() {}

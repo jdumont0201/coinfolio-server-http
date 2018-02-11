@@ -1,26 +1,68 @@
 use ws::connect;
 use serde_json;
 use reqwest;
+use std;
 use RefreshData;
 use std::collections::HashMap;
-use Brokers::{BROKER,getKey,TASK};
+use Brokers::{BROKER, getKey, TASK};
 use DataRegistry;
-pub struct RegistryData{
+
+pub struct RegistryData {
     pub bid: Option<String>,
     pub ask: Option<String>,
     pub last: Option<String>,
-    pub bids:Option<Vec<Vec<String>>>,
-    pub asks:Option<Vec<Vec<String>>>
+    pub bids: HashMap<String,String>,
+    pub asks: HashMap<String,String>,
 }
+
 pub struct Data {
     pub bid: Option<String>,
     pub ask: Option<String>,
     pub last: Option<String>,
 }
 
-pub struct DepthData {
-    pub bids: Option<Vec<Vec<String>>>,
-    pub asks: Option<Vec<Vec<String>>>,
+pub struct Universal_DepthData {
+    pub bids: HashMap<String,String>,
+    pub asks: HashMap<String,String>
+}
+impl std::fmt::Debug for Universal_DepthData {
+    fn fmt(&self, fmt: &mut std::fmt::Formatter) -> std::fmt::Result {
+        let mut st="";
+        try!(fmt.write_str("bids:["));
+        for i in self.bids.iter(){
+            try!(fmt.write_str(st));
+            try!(fmt.write_str(&format!("{:?}",i)));
+            st=",";
+        }
+        let mut st="";
+        try!(fmt.write_str("],asks:["));
+        for i in self.bids.iter(){
+            try!(fmt.write_str(st));
+            try!(fmt.write_str(&format!("{:?}",i)));
+            st=",";
+        }
+
+        try!(fmt.write_str("]"));
+
+        Ok(())
+    }
+}
+
+#[derive(Clone)]
+pub struct Universal_DepthData_in {
+    pub price: String,
+    pub size: String,
+}
+
+impl std::fmt::Debug for Universal_DepthData_in {
+    fn fmt(&self, fmt: &mut std::fmt::Formatter) -> std::fmt::Result {
+            try!(fmt.write_str("["));
+            try!(fmt.write_str(&self.price));
+            try!(fmt.write_str(","));
+            try!(fmt.write_str(&self.size));
+            try!(fmt.write_str("]"));
+        Ok(())
+    }
 }
 
 mod binance;
@@ -99,7 +141,7 @@ pub fn fetch_bidask(broker: BROKER) -> HashMap<String, Data> {
 
 pub fn fetch_depth(broker: BROKER, pair: &String) -> String {
     //println!("fetch string {}", broker);
-    let url = format!("{}{}", get_url(TASK::HTTP_DEPTH, broker  , "".to_string()), pair);
+    let url = format!("{}{}", get_url(TASK::HTTP_DEPTH, broker, "".to_string()), pair);
     let mut result: String;
     if let Ok(mut res) = reqwest::get(&url) {
         let getres = match res.text() {
@@ -121,7 +163,7 @@ pub fn fetch_depth(broker: BROKER, pair: &String) -> String {
 
 pub fn fetch_price(broker: BROKER) -> HashMap<String, Data> {
     //println!("fetch price {}",broker);
-    let url = get_url(TASK::HTTP_PRICE,broker, "".to_string());
+    let url = get_url(TASK::HTTP_PRICE, broker, "".to_string());
     let mut result: HashMap<String, Data>;
     if let Ok(mut res) = reqwest::get(&url) {
         let getres = match res.text() {
@@ -148,18 +190,24 @@ pub fn listen_ws_tick(task: TASK, broker: BROKER) {
             match connect(url.to_string(), |out| binance::WSTickClient { out: out }) {
                 Ok(c) => { println!("connected"); }
                 Err(err) => { println!("WS Cannot connect {} {}", broker, url) }
-            }},
-            _ => { println ! ("err unknown broker"); }
-
+            }
+        }
+        _ => { println!("err unknown broker"); }
     }
 }
 
-pub fn listen_ws_depth(task: TASK, broker: BROKER,symbol:String,registry:&DataRegistry) {
+pub fn listen_ws_depth(task: TASK, broker: BROKER, symbol: String, registry: &DataRegistry) {
     let url = get_url(task, broker, symbol.to_string());
     println!("listen url {} {}", broker, url);
     match broker {
         BROKER::BINANCE => {
-            match connect(url.to_string(), |out| binance::WSDepthClient { out: out,broker:broker,symbol:symbol.to_string(),registry:registry.clone() }) {
+            match connect(url.to_string(), |out| binance::WSDepthClient { out: out, broker: broker, symbol: symbol.to_string(), registry: registry.clone() }) {
+                Ok(c) => { println!("connected"); }
+                Err(err) => { println!("WS Cannot connect {} {}", broker, url) }
+            }
+        }
+        BROKER::HITBTC => {
+            match connect(url.to_string(), |out| hitbtc::WSDepthClient { out: out, broker: broker, symbol: symbol.to_string(), registry: registry.clone() }) {
                 Ok(c) => { println!("connected"); }
                 Err(err) => { println!("WS Cannot connect {} {}", broker, url) }
             }
@@ -208,6 +256,10 @@ fn get_url(task: TASK, broker: BROKER, symbol: String) -> String {
                 BROKER::BINANCE => {
                     r = binance::URL_WS_DEPTH.to_string();
                     r = str::replace(&r, "XXX", &symbol)
+                }
+                BROKER::HITBTC => {
+                    r = hitbtc::URL_WS_DEPTH.to_string();
+
                 }
                 _ => {}
             }

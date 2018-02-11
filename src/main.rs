@@ -25,12 +25,13 @@ use iron::{Chain, Request, Iron};
 use iron::{BeforeMiddleware, AfterMiddleware, typemap};
 use time::precise_time_ns;
 use std::thread;
+use std::cell::RefCell;
 use iron::status;
 use router::{Router, NoRoute};
 use std::collections::HashMap;
 use std::sync::{RwLock ,Arc, Mutex};
 use Universal::fetch_bidask;
-use Universal::{Data,DepthData,RegistryData};
+use Universal::{Data,Universal_DepthData,RegistryData};
 use chrono::prelude::*;
 use time::Duration;
 use Brokers::{BROKER,getKey,getEnum,TASK,BROKERS};
@@ -38,6 +39,7 @@ use Brokers::{BROKER,getKey,getEnum,TASK,BROKERS};
 //TYPES FOR SHARED STRUCTURES ACROSS THREADS
 type DataRegistry = HashMap<String,Arc<RwLock<HashMap<String, RegistryData>>>>;
 type TextRegistry = HashMap<String,Arc<RwLock<String>>>;
+type DictRegistry = Arc<RwLock<definitions::Dictionary>>;
 
 type BidaskRegistry = Arc<Mutex<Option<HashMap<String, HashMap<String, RegistryData>>>>>;
 type BidaskReadOnlyRegistry = Arc<RwLock<Option<HashMap<String, HashMap<String, RegistryData>>>>>;
@@ -48,8 +50,6 @@ type BidaskTextRegistry = Arc<Mutex<Option<HashMap<String, String>>>>;
 //MAIN
 fn main() {
     let mut DICTIONARY=definitions::generateReference();
-    let m=DICTIONARY.rawNameToUniversalName("bitfinex".to_string(),"tBTCUSD".to_string());
-    println!("{}",m);
 
     //THREADS VECTOR
     let mut children = vec![];
@@ -72,24 +72,32 @@ fn main() {
     let R2 = R.clone();
     let R3 = R.clone();
     let R4 = R.clone();
+    let R6 = R.clone();
     let R5 = R.clone();
     let registry5 = R.clone();
     let RT4 = RT.clone();
 
     children.push(thread::spawn(move || {
-        start_http_server(&RT2,&R2);
+        let DD:DictRegistry=Arc::new(RwLock::new(DICTIONARY.clone()));
+        start_http_server(&RT2,&R2,&DD);
     }));
 
     //"update data" threads
     children.push(thread::spawn(move || {
-        start_datarefresh_thread(&R5, &RT3);
+        //start_datarefresh_thread(&R5, &RT3);
     }));
 
     children.push(thread::spawn(move || {
-        Universal::listen_ws_depth(TASK::WS_DEPTH, BROKER::BINANCE,"btcusdt".to_string(),&R3);
+//        Universal::listen_ws_depth(TASK::WS_DEPTH, BROKER::BINANCE,"btcusdt".to_string(),&R3);
+
     }));
     children.push(thread::spawn(move || {
-        Universal::listen_ws_depth(TASK::WS_DEPTH, BROKER::BINANCE,"ethusdt".to_string(),&R4);
+        thread::sleep(std::time::Duration::new(1, 0));
+        Universal::listen_ws_depth(TASK::WS_DEPTH, BROKER::HITBTC,"BTCUSD".to_string(),&R6);
+
+    }));
+    children.push(thread::spawn(move || {
+  //      Universal::listen_ws_depth(TASK::WS_DEPTH, BROKER::BINANCE,"ethusdt".to_string(),&R4);
     }));
 
     //stay open while threads run
@@ -98,10 +106,7 @@ fn main() {
     }
 }
 
-
-
-
-fn start_http_server(RT: &TextRegistry,R:&DataRegistry) {
+fn start_http_server(RT: &TextRegistry,R:&DataRegistry,DICT:&DictRegistry) {
     println!("Coinamics Server HTTP");
     //create routes
     let mut router = Router::new();
@@ -111,6 +116,10 @@ fn start_http_server(RT: &TextRegistry,R:&DataRegistry) {
     router.get("/public/:broker/bidask", move |request: &mut Request| ServeHTTP::get_bidask(request, &RT2), "ticker");
     let R2 = R.clone();
     router.get("/pair/:pair", move |request: &mut Request| ServeHTTP::get_pair(request, &R2), "pair");
+    let R2b = R.clone();
+
+    let DD2=DICT.clone();
+    router.get("/supra/:supra/infra/:infra", move |request: &mut Request| ServeHTTP::get_infrasupra(request, &R2b,&DD2), "infrasupra");
     router.get("/public/:broker/depth/:pair", move |request: &mut Request| ServeHTTP::get_depth(request), "depth");
     let R3=R.clone();
     router.get("/target/:broker/:pair", move |request: &mut Request| ServeHTTP::target(request,&R3), "target");
