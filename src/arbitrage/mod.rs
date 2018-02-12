@@ -1,3 +1,4 @@
+use debug;
 use std;
 use time::Duration;
 use Brokers::{BROKER, getEnum, TASK, BROKERS};
@@ -7,10 +8,8 @@ use Universal::{Universal_Orderbook, RegistryData};
 use types::{DataRegistry, TextRegistry, DictRegistry, OrderbookSide, BidaskRegistry, BidaskReadOnlyRegistry, BidaskTextRegistry};
 use routes::orderbook_to_ordered;
 use std::collections::HashMap;
-
 use chrono::offset::{TimeZone, Utc};
-
-
+use commissions::{get_trading_commission_pc,get_deposit_commission,get_withdraw_commission};
 #[derive(Clone)]
 pub struct Portfolio {
     pub qty: f64,
@@ -34,8 +33,9 @@ pub struct OptimizationResult {
 
 impl OptimizationResult {
     fn to_json(&mut self) -> String {
-        let mut best;
-        if self.best.profit > 0. { best = self.best.to_json() } else { best = "null".to_string() };
+        let best;
+        //if self.best.profit > 0. { best = self.best.to_json() } else { best = "null".to_string() };
+        best = self.best.to_json();
 
         let mut ordersstr = format!("{{\"best\":{},\"all\":{{", best);
         let mut st = "";
@@ -181,11 +181,6 @@ impl Level {
 
 // for each broker, reads data[PAIR] and computes cheapest ask and most expensive bid
 pub fn recap(budget: f64, infra: String, supra: String, R: &DataRegistry, DICT: &DictRegistry) -> String {
-    let d1 = Utc::now();
-
-    let mut cheapestBroker: String;
-    let mut cheapestAsk: Vec<(f64, f64)>;
-
     let mut OS = optimize_single(budget, infra, supra, R, DICT);
     OS.to_json()
 }
@@ -198,33 +193,46 @@ pub fn optimize_single(budget: f64, infra: String, supra: String, R: &DataRegist
         //let mut TT = Transactions { typ: "BUY".to_string(), meanPrice: 0., best_recap: "".to_string(), name: format!("Buy {}/{}", supra.to_string(), infra.to_string()), symbol: format!("{}{}", supra, infra), transactions: HashMap::new(), bestVal: 1000000000., best: None };
         if infra == "USD" {
             let broker: &str = BROKERS[i];
+            println!("try {}", broker);
             let broker_e = getEnum(BROKERS[i].to_string()).unwrap();
             let pairopt = dictionary::read_rawname(broker_e, supra.to_string(), infra.to_string(), DICT);
             if pairopt.is_some() {//if pair exists
+                println!("   try {} is some", broker);
                 let pair = pairopt.unwrap();
                 let RB = R.get(broker).unwrap();
+                println!("{} READ {}", broker, pair);
                 if let Ok(hm) = RB.read() { //read registry for this pair
-                    let dataOption: Option<&RegistryData> = hm.get(&pair.to_string());
+                    println!("try {} read ok", broker);
+                    let dataOption: Option<&RegistryData> = hm.get(&pair.to_string().to_uppercase());
                     match dataOption {
                         Some(data) => {
-                            if data.get_bids().len() > 0 {
+                            if data.has_bids() {
+                                debug::print_read_depth(broker_e, &pair.to_string(), &format!(" first broker ok"));
+
                                 let mut HH = HashMap::new();
                                 let origin = Portfolio { qty: budget, asset: "USD".to_string(), value: budget };
                                 let T1 = getBuyTransaction(&origin, data, broker.to_string(), infra.to_string(), supra.to_string());
                                 let T2 = getWithdrawTransaction(&T1.clone().portfolio, data, broker.to_string(), infra.to_string(), supra.to_string());
                                 for j in 0..BROKERS.len() {//for each broker
+
                                     if i != j {
                                         let broker2: &str = BROKERS[j];
+                                        println!("   try {}", broker2);
                                         let broker2_e = getEnum(BROKERS[j].to_string()).unwrap();
                                         let RB2 = R.get(broker2).unwrap();
                                         if let Ok(hm2) = RB2.read() { //read registry for this pair
-                                            let pair2opt = dictionary::read_rawname(broker_e, supra.to_string(), infra.to_string(), DICT);
+                                            println!("   try {} read ok", broker2);
+                                            let pair2opt = dictionary::read_rawname(broker2_e, supra.to_string(), infra.to_string(), DICT);
                                             if pair2opt.is_some() {//if pair exists
+                                                println!("   try {} is some", broker2);
                                                 let pair2 = pair2opt.unwrap();
-                                                let dataOption2: Option<&RegistryData> = hm2.get(&pair2.to_string());
+                                                let dataOption2: Option<&RegistryData> = hm2.get(&pair2.to_string().to_uppercase());
                                                 match dataOption2 {
                                                     Some(data2) => {
-                                                        if data2.get_bids().len() > 0 {
+                                                        println!("   try {} has data", broker2);
+                                                        if data2.has_bids() {
+                                                            println!("   try {} has bids", broker2);
+                                                            debug::print_read_depth(broker2_e, &pair.to_string(), &format!("second broker ok"));
                                                             let T3 = getDepositTransaction(&T2.clone().portfolio, data2, broker2.to_string(), infra.to_string(), supra.to_string());
                                                             let T4 = getSellTransaction(&T3.clone().portfolio, data2, broker2.to_string(), infra.to_string(), supra.to_string());
 
@@ -240,18 +248,25 @@ pub fn optimize_single(budget: f64, infra: String, supra: String, R: &DataRegist
                                                                 O.profit = profit;
                                                                 O.profitpc = profitpc;
                                                                 O.operations = vec![T1.clone(), T2.clone(), T3.clone(), T4.clone()];
+                                                                O.set_recap();
                                                                 ;
                                                             }
                                                             println!("{} -> {} = {}", broker, broker2, profit);
+                                                        } else {
+                                                            debug::print_read_depth(broker_e, &pair.to_string(), &format!(" second broker nok"));
                                                         }
                                                     }
-                                                    None => {}
+                                                    None => {
+                                                        println!("   try {} has no data in hm for {}", broker2, &pair2.to_string().to_uppercase());
+                                                    }
                                                 }
-                                            }
+                                            } else { println!("   try {} no match in dict for ", broker2); }
                                         }
                                     }
                                 }
                                 H.insert(broker.to_string(), HH);
+                            } else {
+                                debug::print_read_depth(broker_e, &pair.to_string(), &format!(" first broker nok"));
                             }
                         }
                         None => {}
@@ -288,7 +303,7 @@ pub fn getDepositTransaction(ptf: &Portfolio, data: &RegistryData, broker: Strin
     T.commission = get_deposit_commission(broker.to_string(), ptf.qty);
     let q = ptf.qty - T.commission;
     let v = ptf.value * q / ptf.qty;
-    TransactionResult { portfolio: Portfolio { qty: q, value: v, asset: supra.to_string() }, remainer: Portfolio { qty:0., value:0., asset: supra }, transaction: T }
+    TransactionResult { portfolio: Portfolio { qty: q, value: v, asset: supra.to_string() }, remainer: Portfolio { qty: 0., value: 0., asset: supra }, transaction: T }
 }
 
 pub fn getWithdrawTransaction(ptf: &Portfolio, data: &RegistryData, broker: String, infra: String, supra: String) -> TransactionResult {
@@ -317,11 +332,11 @@ pub fn getWithdrawTransaction(ptf: &Portfolio, data: &RegistryData, broker: Stri
     }
     let q = ptf.qty - commission_supra;
     let v = ptf.value - T.commission;//* q / ptf.qty;
-    TransactionResult { portfolio: Portfolio { qty: q, value: v, asset: supra.to_string() }, remainer: Portfolio { qty:0., value:0., asset: supra },transaction: T }
+    TransactionResult { portfolio: Portfolio { qty: q, value: v, asset: supra.to_string() }, remainer: Portfolio { qty: 0., value: 0., asset: supra }, transaction: T }
 }
 
 pub fn getSellTransaction(ptf: &Portfolio, data: &RegistryData, broker: String, infra: String, supra: String) -> TransactionResult {
-    let commissionBrokerTrading =get_trading_commission_pc(broker.to_string());
+    let commissionBrokerTrading = get_trading_commission_pc(broker.to_string());
     let budgetAvailable = ptf.qty;
     let BIDS = data.get_bids();
     let ordered: Vec<(f64, String, f64)> = orderbook_to_ordered(BIDS, true);
@@ -377,11 +392,11 @@ pub fn getSellTransaction(ptf: &Portfolio, data: &RegistryData, broker: String, 
     T.remainer = budres;
 
     T.value = residual;
-    TransactionResult { portfolio: Portfolio { qty: residual, value: T.value, asset: infra }, remainer: Portfolio { qty: T.remainer, value: T.remainer*ptf.value/ptf.qty, asset: supra }, transaction: T }
+    TransactionResult { portfolio: Portfolio { qty: residual, value: T.value, asset: infra }, remainer: Portfolio { qty: T.remainer, value: T.remainer * ptf.value / ptf.qty, asset: supra }, transaction: T }
 }
 
 pub fn getBuyTransaction(ptf: &Portfolio, data: &RegistryData, broker: String, infra: String, supra: String) -> TransactionResult {
-    let commissionBrokerTrading =get_trading_commission_pc(broker.to_string());
+    let commissionBrokerTrading = get_trading_commission_pc(broker.to_string());
     let budgetAvailable = ptf.value;
     let ASKS = data.get_asks();
     let ordered: Vec<(f64, String, f64)> = orderbook_to_ordered(ASKS, false);
@@ -432,260 +447,4 @@ pub fn getBuyTransaction(ptf: &Portfolio, data: &RegistryData, broker: String, i
     T.value = T.remainer + residual;
     T.commission = T.value * commissionBrokerTrading;
     TransactionResult { portfolio: Portfolio { qty: T.quantityTotal, value: T.value, asset: supra }, remainer: Portfolio { qty: T.remainer, value: T.remainer, asset: infra }, transaction: T }
-}
-fn get_trading_commission(broker: String, value: f64) -> f64 {
-    get_trading_commission_pc(broker) * value
-}
-fn get_trading_commission_pc(broker: String) -> f64 {
-    match broker.as_ref() {
-        "binance" => {
-            0.005
-        }
-        "kucoin" => {
-            0.01
-        }
-        _ => {
-            0.01
-        }
-    }
-}
-
-fn get_deposit_commission(broker: String, value: f64) -> f64 {
-    match broker.as_ref() {
-        "binance" => {
-            0.
-        }
-        "kucoin" => {
-            0.
-        }
-        "hitbtc" => {
-            0.
-        }
-        _ => {
-            0.
-        }
-    }
-}
-
-fn get_withdraw_commission(broker: String, symbol: String, value: f64) -> f64 {
-    match broker.as_ref() {
-        "kucoin" => {
-            match symbol.as_ref() {
-                "KCS" => { 2. }
-                "BTC" => { 0.001 }
-                "USDT" => { 10. }
-                "ETH" => { 0.01 }
-                "ACAT" => { 1. }
-                "CTR" => { 2. }
-                "LTC" => { 0.001 }
-                "NEO" => { 0. }
-                "HAT" => { 0.5 }
-                "GAS" => { 0. }
-                "KNC" => { 0.5 }
-                "BTM" => { 5. }
-                "QTUM" => { 0.1 }
-                "EOS" => { 0.5 }
-                "CVC" => { 3. }
-                "OMG" => { 0.1 }
-                "PAY" => { 0.5 }
-                "SNT" => { 20. }
-                "BHC" => { 1. }
-                "HSR" => { 0.01 }
-                "WTC" => { 0.1 }
-                "VEN" => { 2. }
-                "MTH" => { 10. }
-                "RPX" => { 1. }
-                "REQ" => { 20. }
-                "EVX" => { 0.5 }
-                "MOD" => { 0.5 }
-                "NEBL" => { 0.1 }
-                "DGB" => { 0.5 }
-                "CAG" => { 2. }
-                "CFD" => { 0.5 }
-                "RDN" => { 0.5 }
-                "UKG" => { 5. }
-                "BCPT" => { 5. }
-                "PPT" => { 0.1 }
-                "BCH" => { 0.0005 }
-                "STX" => { 2. }
-                "NULS" => { 1. }
-                "GVT" => { 0.1 }
-                "HST" => { 2. }
-                "PURA" => { 0.5 }
-                "SUB" => { 2. }
-                "QSP" => { 5. }
-                "POWR" => { 1. }
-                "FLIXX" => { 10. }
-                "LEND" => { 20. }
-                "AMB" => { 3. }
-                "RHOC" => { 2. }
-                "R" => { 2. }
-                "DENT" => { 50. }
-                "DRGN" => { 1. }
-                "ACT" => { 0.1 }
-                "ENJ" => { 10. }
-                "CAT" => { 20. }
-                "DAT" => { 20. }
-                "CL" => { 50. }
-                "TEL" => { 500. }
-                "DNA" => { 3. }
-                "AGI" => { 2. }
-                "COFI" => { 5. }
-                "ARY" => { 10. }
-                "cV" => { 30. }
-                "ZPT" => { 1. }
-                "EBTC" => { 3. }
-                "ING" => { 3. }
-                "HPB" => { 0.5 }
-                "CXO" => { 30. }
-                "TKY" => { 1. }
-                "COV" => { 3. }
-                "PARETO" => { 40. }
-                "MWAT" => { 20. }
-                _=>{0.}
-            }
-        }
-        "binance" => {
-            match symbol.as_ref() {
-                "BNB" => { 0.92 }
-                "BTC" => { 0.001 }
-                "NEO" => { 0. }
-                "ETH" => { 0.01 }
-                "LTC" => { 0.01 }
-                "QTUM" => { 0.01 }
-                "EOS" => { 1. }
-                "SNT" => { 39. }
-                "BNT" => { 1.7 }
-                "GAS" => { 0. }
-                "BCC" => { 0.001 }
-                "BTM" => { 5. }
-                "USDT" => { 17.1 }
-                "HCC" => { 0.0005 }
-                "HSR" => { 0.0001 }
-                "OAX" => { 12.4 }
-                "DNT" => { 104. }
-                "MCO" => { 1.17 }
-                "ICN" => { 5.3 }
-                "ZRX" => { 7.8 }
-                "OMG" => { 0.69 }
-                "WTC" => { 0.4 }
-                "LRC" => { 13. }
-                "LLT" => { 67.8 }
-                "YOYO" => { 52. }
-                "TRX" => { 178. }
-                "STRAT" => { 0.1 }
-                "SNGLS" => { 59. }
-                "BQX" => { 2.1 }
-                "KNC" => { 2.7 }
-                "SNM" => { 38. }
-                "FUN" => { 150. }
-                "LINK" => { 20.5 }
-                "XVG" => { 0.1 }
-                "CTR" => { 9.5 }
-                "SALT" => { 2. }
-                "MDA" => { 6.5 }
-                "IOTA" => { 0.5 }
-                "SUB" => { 12.2 }
-                "ETC" => { 0.01 }
-                "MTL" => { 2.2 }
-                "MTH" => { 57. }
-                "ENG" => { 3. }
-                "AST" => { 13.9 }
-                "DASH" => { 0.002 }
-                "BTG" => { 0.001 }
-                "EVX" => { 4.9 }
-                "REQ" => { 30.8 }
-                "VIB" => { 35. }
-                "POWR" => { 11.4 }
-                "ARK" => { 0.1 }
-                "XRP" => { 0.25 }
-                "MOD" => { 3. }
-                "ENJ" => { 58. }
-                "STORJ" => { 8.6 }
-                "VEN" => { 2. }
-                "KMD" => { 0.002 }
-                "RCN" => { 48. }
-                "NULS" => { 3.4 }
-                "RDN" => { 3.2 }
-                "XMR" => { 0.04 }
-                "DLT" => { 28.4 }
-                "AMB" => { 15.9 }
-                "BAT" => { 24. }
-                "ZEC" => { 0.005 }
-                "BCPT" => { 18. }
-                "ARN" => { 5.3 }
-                "GVT" => { 0.59 }
-                "CDT" => { 92. }
-                "GXS" => { 0.3 }
-                "POE" => { 148. }
-                "QSP" => { 30. }
-                "BTS" => { 1. }
-                "XZC" => { 0.02 }
-                "LSK" => { 0.1 }
-                "TNT" => { 59. }
-                "FUEL" => { 71. }
-                "MANA" => { 76. }
-                "BCD" => { 1. }
-                "DGD" => { 0.04 }
-                "ADX" => { 5.8 }
-                "ADA" => { 1. }
-                "PPT" => { 0.33 }
-                "CMT" => { 47. }
-                "XLM" => { 0.01 }
-                "CND" => { 48. }
-                "LEND" => { 100. }
-                "WABI" => { 5.5 }
-                "SBTC" => { 1. }
-                "BCX" => { 1. }
-                "WAVES" => { 0.002 }
-                "TNB" => { 118. }
-                "GTO" => { 35. }
-                "ICX" => { 2.1 }
-                "OST" => { 30. }
-                "ELF" => { 7. }
-                "AION" => { 3.1 }
-                "ETF" => { 1. }
-                "BRD" => { 10.5 }
-                "NEBL" => { 0.01 }
-                "VIBE" => { 18.7 }
-                "LUN" => { 0.46 }
-                "CHAT" => { 31.5 }
-                "RLC" => { 6.1 }
-                "INS" => { 3.8 }
-                "IOST" => { 214.6 }
-                "STEEM" => { 0.01 }
-                "NANO" => { 0.01 }
-                "AE" => { 3.2 }
-                "VIA" => { 0.01 }
-                "BLZ" => { 14. }
-                "EDO" => { 4.3 }
-                "WINGS" => { 13.7 }
-                "NAV" => { 0.2 }
-                "TRIG" => { 9.1 }
-                "APPC" => { 13.5 }
-                "PIVX" => { 0.02 }
-                _ => { 0. }
-            }
-        }
-        "hitbtc" => {
-            match symbol.as_ref() {
-                "BTC" => { 0.00085 }
-                "BCC" => { 0.0018 }
-                "ETH" => { 0.00215 }
-                "ETC" => { 0.002 }
-                "USDT" => { 100. }
-                "STRAT" => { 0.01 }
-                "LTC" => { 0.003 }
-                "DASH" => { 0.03 }
-                "XMR" => { 0.09 }
-                "BCN" => { 0.1 }
-                "ARDR" => { 1. }
-                "STEEM" => { 0.01 }
-                _ => { 0. }
-            }
-        }
-        _ => {
-            0.
-        }
-    }
 }

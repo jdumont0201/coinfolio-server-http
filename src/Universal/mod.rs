@@ -1,4 +1,5 @@
 use hyper;
+use debug;
 use sha2::Sha256;
 use hmac::{Hmac, Mac};
 use ws::connect;
@@ -6,7 +7,7 @@ use serde_json;
 use reqwest;
 use std;
 use types::{DataRegistry, TextRegistry, DictRegistry, OrderbookSide, BidaskRegistry, BidaskReadOnlyRegistry, BidaskTextRegistry};
-use RefreshData;
+
 use std::collections::HashMap;
 use dictionary::Dictionary;
 use dictionary;
@@ -28,9 +29,9 @@ impl RegistryData {
     pub fn get_bids_mut(&mut self) -> &mut OrderbookSide {
         &mut self.orderbook.bids
     }
-    pub fn get_bids(&self) -> &OrderbookSide {
-        &self.orderbook.bids
-    }
+    pub fn get_bids(&self) -> &OrderbookSide {        &self.orderbook.bids    }
+    pub fn has_bids(&self) -> bool {        self.orderbook.bids.len() >0    }
+    pub fn has_asks(&self) -> bool {        self.orderbook.asks.len() >0    }
     pub fn get_asks_mut(&mut self) -> &mut OrderbookSide {
         &mut self.orderbook.asks
     }
@@ -178,7 +179,7 @@ fn parse_response_depth(task: TASK, broker: BROKER, text: String) -> Universal_O
 
 pub fn fetch_bidask(broker: BROKER) -> HashMap<String, Data> {
     let url = get_url(TASK::HTTP_BIDASK, broker, "".to_string());
-    //println!("fetch bidask {} {}", broker,url);
+    debug::print_fetch(broker, &url);
     let mut result: HashMap<String, Data>;
     if let Ok(mut res) = reqwest::get(&url) {
         let getres = match res.text() {
@@ -204,7 +205,7 @@ pub fn fetch_depth(broker: BROKER, infra: &String, supra: &String, DICT: &DictRe
     if rawnameopt.is_some() {
         let rawpair = rawnameopt.unwrap();
         let url = format!("{}", get_url(TASK::HTTP_DEPTH, broker, rawpair.to_string()));
-//            println!("fetch depth broker={} pair={} url={}", broker, infra, url);
+        debug::print_fetch(broker, &url);
         let h = get_headers(TASK::HTTP_DEPTH, broker, infra.to_string(), supra.to_string(), "".to_string());
 
         let client = reqwest::Client::new();
@@ -212,6 +213,7 @@ pub fn fetch_depth(broker: BROKER, infra: &String, supra: &String, DICT: &DictRe
             Ok(mut res) => {
                 match res.text() {
                     Ok(val) => {
+
                         parse_response_depth(TASK::HTTP_DEPTH, broker, val)
                     }
                     Err(err) => {
@@ -233,6 +235,7 @@ pub fn fetch_depth(broker: BROKER, infra: &String, supra: &String, DICT: &DictRe
 
 pub fn fetch_price(broker: BROKER) -> HashMap<String, Data> {
     let url = get_url(TASK::HTTP_PRICE, broker, "".to_string());
+    debug::print_fetch(broker, &url);
     let result: HashMap<String, Data>;
     if let Ok(mut res) = reqwest::get(&url) {
         let getres = match res.text() {
@@ -281,6 +284,12 @@ pub fn listen_ws_depth(task: TASK, broker: BROKER, symbol: String, registry: &Da
                 Err(err) => { println!("WS Cannot connect {} {}", broker, url) }
             }
         }
+        BROKER::BITFINEX => {
+            match connect(url.to_string(), |out| bitfinex::WSDepthClient { out: out, broker: broker, symbol: symbol.to_string(), registry: registry.clone() }) {
+                Ok(c) => { println!("connected"); }
+                Err(err) => { println!("WS Cannot connect {} {}", broker, url) }
+            }
+        }
         _ => { println!("err unknown broker"); }
     }
 }
@@ -312,6 +321,10 @@ fn get_url(task: TASK, broker: BROKER, pair: String) -> String {
                     r = kucoin::URL_HTTP_DEPTH.to_string();
                     r = str::replace(&r, "XXX", &pair);
                 }
+                BROKER::KRAKEN => {
+                    r = kraken::URL_HTTP_DEPTH.to_string();
+                    r = str::replace(&r, "XXX", &pair);
+                }
                 _ => {}
             }
         }
@@ -329,9 +342,13 @@ fn get_url(task: TASK, broker: BROKER, pair: String) -> String {
                 BROKER::BINANCE => {
                     r = binance::URL_WS_DEPTH.to_string();
                     r = str::replace(&r, "XXX", &pair);
+                    r=r.to_lowercase();
                 }
                 BROKER::HITBTC => {
                     r = hitbtc::URL_WS_DEPTH.to_string();
+                }
+                BROKER::BITFINEX => {
+                    r = bitfinex::URL_WS_DEPTH.to_string();
                 }
                 _ => {}
             }

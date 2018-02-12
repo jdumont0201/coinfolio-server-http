@@ -2931,7 +2931,13 @@ pub fn read_rawaltname(broker:BROKER,supra:String,infra:String,DICT : &DictRegis
         let broker_str: String = getKey(broker);
         let rawnameopt = DD.infrasupraToAltRawName(&broker_str, &infra, &supra);
         if rawnameopt.is_some() {
-            Some(rawnameopt.unwrap())
+            let rawname=rawnameopt.unwrap();
+            if rawname.len()>0 {
+                Some(rawname)
+            }else {
+                read_rawname(broker,supra,infra,DICT)
+            }
+
         }else{
             None
         }

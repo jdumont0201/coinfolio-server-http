@@ -5,10 +5,9 @@ use serde_json;
 use Brokers::BROKER;
 use Universal::Universal_Orderbook;
 use Universal::Universal_Orderbook_in;
-use RefreshData;
 use types::{DataRegistry, TextRegistry, DictRegistry,OrderbookSide,BidaskRegistry, BidaskReadOnlyRegistry, BidaskTextRegistry};
 use ws::{listen, connect, Handshake, Handler, Sender, Result as wsResult, Message, CloseCode};
-
+use update;
 static NAME: &str = "hitbtc";
 pub static URL_HTTP_BIDASK: &str = "https://api.hitbtc.com/api/2/public/ticker";
 pub static URL_WS_DEPTH: &str = "wss://api.hitbtc.com/api/2/ws";
@@ -91,16 +90,10 @@ impl Handler for WSDepthClient {
                     if parsedMsg_.method.is_some() {
                         match parsedMsg_.method.unwrap().as_ref() {
                             "snapshotOrderbook" => {
-                                let mut i=0;
-                                for item in bid.iter() {
-
-                                    i=i+1
-
-                                }
-                                RefreshData::snapshot_depth(self.broker, &self.registry, self.symbol.to_string(), D);
+                                update::snapshot_depth(self.broker, &self.registry, self.symbol.to_string(), D);
                             }
                             "updateOrderbook" => {
-//                                RefreshData::update_depth(self.broker, &self.registry, self.symbol.to_string(), D);
+                                update::update_depth(self.broker, &self.registry, self.symbol.to_string(), D);
                             }
                             _ => {}
                         }

@@ -1,17 +1,20 @@
-use std;use Data;
+use std;
+use Data;
 use std::collections::HashMap;
-use types::{DataRegistry, TextRegistry, DictRegistry,OrderbookSide,BidaskRegistry, BidaskReadOnlyRegistry, BidaskTextRegistry};use serde_json;
+use types::{DataRegistry, TextRegistry, DictRegistry, OrderbookSide, BidaskRegistry, BidaskReadOnlyRegistry, BidaskTextRegistry};
+use serde_json;
 use Brokers::BROKER;
 use Universal::Universal_Orderbook;
 use Universal::Universal_Orderbook_in;
-use RefreshData;
-
+use debug;
+use update;
 use ws::{listen, connect, Handshake, Handler, Sender, Result as wsResult, Message, CloseCode};
 
-static NAME:&str="bitfinex";
-pub static URL_HTTP_BIDASK:&str="https://api.bitfinex.com/v2/tickers?symbols=tBTCUSD,tLTCUSD,tLTCBTC,tETHUSD,tETHBTC,tETCBTC,tETCUSD,tRRTUSD,tRRTBTC,tZECUSD,tZECBTC,tXMRUSD,tXMRBTC,tDSHUSD,tDSHBTC,tBTCEUR,tXRPUSD,tXRPBTC,tIOTUSD,tIOTBTC,tIOTETH,tEOSUSD,tEOSBTC,tEOSETH,tSANUSD,tSANBTC,tSANETH,tOMGUSD,tOMGBTC,tOMGETH,tBCHUSD,tBCHBTC,tBCHETH,tNEOUSD,tNEOBTC,tNEOETH,tETPUSD,tETPBTC,tETPETH,tQTMUSD,tQTMBTC,tQTMETH,tAVTUSD,tAVTBTC,tAVTETH,tEDOUSD,tEDOBTC,tEDOETH,tBTGUSD,tBTGBTC,tDATUSD,tDATBTC,tDATETH,tQSHUSD,tQSHBTC,tQSHETH,tYYWUSD,tYYWBTC,tYYWETH,tGNTUSD,tGNTBTC,tGNTETH,tSNTUSD,tSNTBTC,tSNTETH,tIOTEUR,tBATUSD,tBATBTC,tBATETH,tMNAUSD,tMNABTC,tMNAETH,tFUNUSD,tFUNBTC,tFUNETH,tZRXUSD,tZRXBTC,tZRXETH,tTNBUSD,tTNBBTC,tTNBETH,tSPKUSD,tSPKBTC,tSPKETH,tTRXUSD,tTRXBTC,tTRXETH,tRCNUSD,tRCNBTC,tRCNETH,tRLCUSD,tRLCBTC,tRLCETH,tAIDUSD,tAIDBTC,tAIDETH,tSNGUSD,tSNGBTC,tSNGETH,tREPUSD,tREPBTC,tREPETH,tELFUSD,tELFBTC,tELFETH";
+static NAME: &str = "bitfinex";
+pub static URL_HTTP_BIDASK: &str = "https://api.bitfinex.com/v2/tickers?symbols=tBTCUSD,tLTCUSD,tLTCBTC,tETHUSD,tETHBTC,tETCBTC,tETCUSD,tRRTUSD,tRRTBTC,tZECUSD,tZECBTC,tXMRUSD,tXMRBTC,tDSHUSD,tDSHBTC,tBTCEUR,tXRPUSD,tXRPBTC,tIOTUSD,tIOTBTC,tIOTETH,tEOSUSD,tEOSBTC,tEOSETH,tSANUSD,tSANBTC,tSANETH,tOMGUSD,tOMGBTC,tOMGETH,tBCHUSD,tBCHBTC,tBCHETH,tNEOUSD,tNEOBTC,tNEOETH,tETPUSD,tETPBTC,tETPETH,tQTMUSD,tQTMBTC,tQTMETH,tAVTUSD,tAVTBTC,tAVTETH,tEDOUSD,tEDOBTC,tEDOETH,tBTGUSD,tBTGBTC,tDATUSD,tDATBTC,tDATETH,tQSHUSD,tQSHBTC,tQSHETH,tYYWUSD,tYYWBTC,tYYWETH,tGNTUSD,tGNTBTC,tGNTETH,tSNTUSD,tSNTBTC,tSNTETH,tIOTEUR,tBATUSD,tBATBTC,tBATETH,tMNAUSD,tMNABTC,tMNAETH,tFUNUSD,tFUNBTC,tFUNETH,tZRXUSD,tZRXBTC,tZRXETH,tTNBUSD,tTNBBTC,tTNBETH,tSPKUSD,tSPKBTC,tSPKETH,tTRXUSD,tTRXBTC,tTRXETH,tRCNUSD,tRCNBTC,tRCNETH,tRLCUSD,tRLCBTC,tRLCETH,tAIDUSD,tAIDBTC,tAIDETH,tSNGUSD,tSNGBTC,tSNGETH,tREPUSD,tREPBTC,tREPETH,tELFUSD,tELFBTC,tELFETH";
 pub static URL_WS_DEPTH: &str = "wss://api.bitfinex.com/ws/";
-pub fn parse_bidask(text:String) -> HashMap<String,Data>{
+
+pub fn parse_bidask(text: String) -> HashMap<String, Data> {
     let mut r = HashMap::new();
     let text2b = str::replace(&text, "[[", "");
     let text2 = str::replace(&text2b, "]]", "");
@@ -31,17 +34,25 @@ pub fn parse_bidask(text:String) -> HashMap<String,Data>{
                 r.insert(symbol.to_string(), Data { bid: Some(bid.to_string()), ask: Some(ask.to_string()), /* bidq: Some(row.bidQty), askq: Some(row.askQty),*/ last: Some(last.to_string()) });
             }
         }
-    }else{
+    } else {
         println!(" !!! cannot read bidask  {}", NAME)
     }
     r
 }
 
 
-
 //WS DEPTH
 #[derive(Serialize, Deserialize)]
 pub struct WSDepth {
+    pub jsonrpc: String,
+    pub method: Option<String>,
+    pub params: WSDepth_in,
+    pub result: Option<bool>,
+}
+
+//WS DEPTH
+#[derive(Serialize, Deserialize)]
+pub struct WSDepthUpdate {
     pub jsonrpc: String,
     pub method: Option<String>,
     pub params: WSDepth_in,
@@ -71,61 +82,57 @@ pub struct WSDepthClient {
 
 impl Handler for WSDepthClient {
     fn on_open(&mut self, _: Handshake) -> wsResult<()> {
-        let json = format!("{{  \"event\":\"subscribe\",   \"channel\":\"book\",   \"pair\":\"{}\", \"prec\":\"{}\",\"length\":\"{}\",\"freq\":\"{}\"}}", self.symbol,"P0",100,"F0");
-        println!("Open ws {} {} ", self.broker, json);
+        let json = format!("{{  \"event\":\"subscribe\",   \"channel\":\"book\",   \"pair\":\"{}\", \"prec\":\"{}\",\"length\":\"{}\",\"freq\":\"{}\"}}", self.symbol, "P0", 100, "F0");
+        debug::print_open_ws( self.broker,&self.symbol, &json);
         self.out.send(json)
     }
     fn on_message(&mut self, msg: Message) -> wsResult<()> {
         let msg2 = msg.to_string();
-        let msg3 = str::replace(&msg2, ",[]", "");
+        debug::print_ws_message(self.broker, &self.symbol,&msg2);
+        let parsedMsg: Result<(u64, f64, u64, f64), serde_json::Error> = serde_json::from_str(&msg2);
 
-        let parsedMsg: Result<WSDepth, serde_json::Error> = serde_json::from_str(&msg3);
         match parsedMsg {
             Ok(parsedMsg_) => {
-                if !parsedMsg_.result.is_some() {
-                    let bid = parsedMsg_.params.bid.clone();
-                    let ask = parsedMsg_.params.ask.clone();
+                //println!("upd");
+                let mut orderbook_bid: OrderbookSide = HashMap::new();
+                let mut orderbook_ask: OrderbookSide = HashMap::new();
 
-                    let mut orderbook_bid: OrderbookSide = HashMap::new();
-
-                    let mut i = 0;
-                    for item in bid.iter() {
-                        if i<10 {
-                            orderbook_bid.insert(item.price.clone(), item.size.clone().parse::<f64>().unwrap());
-                        }
-                        i=i+1;
-                    }
-                    let mut orderbook_ask: OrderbookSide = HashMap::new();
-                    let mut i=0;
-                    for item in ask.iter() {
-                        //                           orderbook_ask.insert(item.price.clone(), item.size.clone().parse::<f64>().unwrap());
-
-                    }
-                    let D = Universal_Orderbook { bids: orderbook_bid, asks: orderbook_ask };
-
-                    if parsedMsg_.method.is_some() {
-                        match parsedMsg_.method.unwrap().as_ref() {
-                            "snapshotOrderbook" => {
-                                let mut i=0;
-                                for item in bid.iter() {
-                                    if i<10 {
-                                        println!("bid parsmsg {} {}",item.price,item.size);
-
-                                    }
-                                    i=i+1
-
-                                }
-                                RefreshData::snapshot_depth(self.broker, &self.registry, self.symbol.to_string(), D);
+                if parsedMsg_.3 > 0. {
+                    orderbook_bid.insert(parsedMsg_.1.to_string(), parsedMsg_.3);
+                }else if parsedMsg_.3 < 0. {
+                    orderbook_ask.insert(parsedMsg_.1.to_string(), parsedMsg_.3);
+                } else {
+                    orderbook_bid.insert(parsedMsg_.1.to_string(), 0.);
+                    orderbook_ask.insert(parsedMsg_.1.to_string(), 0.);
+                }
+                let D = Universal_Orderbook { bids: orderbook_bid, asks: orderbook_ask };
+                update::update_depth(self.broker, &self.registry, self.symbol.to_string(), D);
+            }
+            Err(err) => {
+                let parsedMsg: Result<(u64, Vec<(f64, u64, f64)>), serde_json::Error> = serde_json::from_str(&msg2);
+                match parsedMsg {
+                    Ok(parsedMsg_) => {
+                  //      println!("snap");
+                        let mut orderbook_bid: OrderbookSide = HashMap::new();
+                        let mut orderbook_ask: OrderbookSide = HashMap::new();
+                        for ord in parsedMsg_.1.iter() {
+                            if ord.2 > 0. {
+                                orderbook_bid.insert(ord.0.to_string(), ord.2);
+                            } else if ord.2 < 0. {
+                                orderbook_ask.insert(ord.0.to_string(), -ord.2);
+                            }else{
+                                orderbook_ask.insert(ord.0.to_string(), 0.);
+                                orderbook_bid.insert(ord.0.to_string(), 0.);
                             }
-                            "updateOrderbook" => {
-//                                RefreshData::update_depth(self.broker, &self.registry, self.symbol.to_string(), D);
-                            }
-                            _ => {}
                         }
+                        let D = Universal_Orderbook { bids: orderbook_bid, asks: orderbook_ask };
+                        update::snapshot_depth(self.broker, &self.registry, self.symbol.to_string(), D);
+                    }
+                    Err(err) => {
+                        println!("cannot unmarshal {} ws depth {}", NAME, err)
                     }
                 }
             }
-            Err(err) => { println!("cannot unmarshal {} ws depth {}", NAME, err) }
         }
         Ok(())
     }

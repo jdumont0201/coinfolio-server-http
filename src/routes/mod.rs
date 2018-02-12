@@ -128,7 +128,7 @@ pub fn get_pair(req: &mut Request, R: &DataRegistry) -> IronResult<Response> {
         let broker: &str = BROKERS[i];
         let RB = R.get(broker).unwrap();
         if let Ok(hm) = RB.read() {
-            let Q: Option<&RegistryData> = hm.get(&pair.to_string());
+            let Q: Option<&RegistryData> = hm.get(&pair.to_string().to_uppercase());
             match Q {
                 Some(qq) => {
                     let sti = hmi_to_text(pair.to_string(), qq, false);
@@ -167,7 +167,7 @@ pub fn get_arbitrage(req: &mut Request, R: &DataRegistry, DICT: &DictRegistry) -
             if nameopt.is_some() {
                 let pair = nameopt.unwrap();
                 if let Ok(hm) = RB.read() {
-                    let Q: Option<&RegistryData> = hm.get(&pair.to_string());
+                    let Q: Option<&RegistryData> = hm.get(&pair.to_string().to_uppercase());
                     match Q {
                         Some(data) => {
 

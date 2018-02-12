@@ -1,7 +1,10 @@
 #![allow(non_snake_case)]
 #![allow(non_camel_case_types)]
+#![allow(unused_must_use)]
+#![warn(unused_mut)]
 #[allow(unused_imports)]
 #[allow(dead_code)]
+
 
 //LOAD EXTERNAL MODULES
 extern crate base64;
@@ -11,7 +14,6 @@ extern crate time;
 extern crate hyper;
 extern crate hmac;
 extern crate sha2;
-
 extern crate router;
 extern crate chrono;
 extern crate serde;
@@ -19,22 +21,29 @@ extern crate serde_json;
 #[macro_use]
 extern crate serde_derive;
 extern crate reqwest;
-    extern crate job_scheduler;
+extern crate job_scheduler;
+extern crate colored;
+
 
 //LOAD CUSTOM MODULES
 mod Universal;
 mod routes;
-mod RefreshData;
 mod Brokers;
 mod arbitrage;
 mod dictionary;
+mod commissions;
 mod middlewares;
+mod fetch;
+mod update;
+mod write;
+mod debug;
 mod ws_server;
 mod types;
 
 use types::{DataRegistry, TextRegistry, DictRegistry,OrderbookSide,BidaskRegistry, BidaskReadOnlyRegistry, BidaskTextRegistry};
 //SPECIFY NAMESPACES
 use sha2::Sha256;
+use colored::*;
 use hmac::{Hmac, Mac};
 use base64::{encode, decode};
 
@@ -85,6 +94,7 @@ fn main() {
     let R6 = R.clone();
     let R7 = R.clone();
     let R8 = R.clone();
+    let R9 = R.clone();
     let R5 = R.clone();
     let registry5 = R.clone();
     let RT4 = RT.clone();
@@ -97,11 +107,12 @@ fn main() {
     //"update data" threads
     let DICT=DR.clone();
     children.push(thread::spawn(move || {
-        RefreshData::start_datarefresh_thread(&R5, &RT3,&DR);
+        fetch::start_datarefresh_thread(&R5, &RT3,&DR);
     }));
 
-    children.push(thread::spawn(move || {    Universal::listen_ws_depth(TASK::WS_DEPTH, BROKER::BINANCE,"ethusdt".to_string(),&R8);   }));
+    children.push(thread::spawn(move || {    Universal::listen_ws_depth(TASK::WS_DEPTH, BROKER::BINANCE,"ETHUSDT".to_string(),&R8);   }));
     children.push(thread::spawn(move || {    Universal::listen_ws_depth(TASK::WS_DEPTH, BROKER::HITBTC,"ETHUSD".to_string(),&R7); }));
+    children.push(thread::spawn(move || {    Universal::listen_ws_depth(TASK::WS_DEPTH, BROKER::BITFINEX,"tETHUSD".to_string(),&R9); }));
 
 
     children.push(thread::spawn(move || {

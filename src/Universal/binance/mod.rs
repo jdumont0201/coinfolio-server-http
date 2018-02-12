@@ -5,7 +5,7 @@ use serde_json;
 use Brokers::BROKER;
 use Universal::Universal_Orderbook;
 use Universal::Universal_Orderbook_in;
-use RefreshData;
+use update;
 use ws::{listen, connect, Handshake, Handler, Sender, Result as wsResult, Message, CloseCode};
 
 static NAME: &str = "binance";
@@ -170,7 +170,7 @@ impl Handler for WSDepthClient {
 
                 }
                 let D = Universal_Orderbook { bids: orderbook_bid, asks: orderbook_ask };
-                RefreshData::snapshot_depth(self.broker, &self.registry, self.symbol.to_string(), D);
+                update::snapshot_depth(self.broker, &self.registry, self.symbol.to_string(), D);
 
             }  Err(err) => {                println!("cannot unmarshal {} ws depth {}", NAME, err)            }
         }
