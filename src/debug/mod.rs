@@ -15,5 +15,5 @@ pub fn print_read_depth(broker:BROKER,symbol:&String,msg:&String){
     //println!("{}",format!("{}>{}  read depth {}",broker.to_string(),symbol,msg).magenta());
 }
 pub fn print_fetch(broker:BROKER,url:&String){
-    println!("{}",format!("{} fetch {}",broker.to_string(),url).yellow());
+  //  println!("{}",format!("{} fetch {}",broker.to_string(),url).yellow());
 }

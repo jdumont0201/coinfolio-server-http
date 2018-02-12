@@ -83,12 +83,12 @@ pub struct WSDepthClient {
 impl Handler for WSDepthClient {
     fn on_open(&mut self, _: Handshake) -> wsResult<()> {
         let json = format!("{{  \"event\":\"subscribe\",   \"channel\":\"book\",   \"pair\":\"{}\", \"prec\":\"{}\",\"length\":\"{}\",\"freq\":\"{}\"}}", self.symbol, "P0", 100, "F0");
-        debug::print_open_ws( self.broker,&self.symbol, &json);
+        debug::print_open_ws(self.broker, &self.symbol, &json);
         self.out.send(json)
     }
     fn on_message(&mut self, msg: Message) -> wsResult<()> {
         let msg2 = msg.to_string();
-        debug::print_ws_message(self.broker, &self.symbol,&msg2);
+        debug::print_ws_message(self.broker, &self.symbol, &msg2);
         let parsedMsg: Result<(u64, f64, u64, f64), serde_json::Error> = serde_json::from_str(&msg2);
 
         match parsedMsg {
@@ -99,7 +99,7 @@ impl Handler for WSDepthClient {
 
                 if parsedMsg_.3 > 0. {
                     orderbook_bid.insert(parsedMsg_.1.to_string(), parsedMsg_.3);
-                }else if parsedMsg_.3 < 0. {
+                } else if parsedMsg_.3 < 0. {
                     orderbook_ask.insert(parsedMsg_.1.to_string(), parsedMsg_.3);
                 } else {
                     orderbook_bid.insert(parsedMsg_.1.to_string(), 0.);
@@ -112,7 +112,7 @@ impl Handler for WSDepthClient {
                 let parsedMsg: Result<(u64, Vec<(f64, u64, f64)>), serde_json::Error> = serde_json::from_str(&msg2);
                 match parsedMsg {
                     Ok(parsedMsg_) => {
-                  //      println!("snap");
+                        //      println!("snap");
                         let mut orderbook_bid: OrderbookSide = HashMap::new();
                         let mut orderbook_ask: OrderbookSide = HashMap::new();
                         for ord in parsedMsg_.1.iter() {
@@ -120,7 +120,7 @@ impl Handler for WSDepthClient {
                                 orderbook_bid.insert(ord.0.to_string(), ord.2);
                             } else if ord.2 < 0. {
                                 orderbook_ask.insert(ord.0.to_string(), -ord.2);
-                            }else{
+                            } else {
                                 orderbook_ask.insert(ord.0.to_string(), 0.);
                                 orderbook_bid.insert(ord.0.to_string(), 0.);
                             }
@@ -129,7 +129,13 @@ impl Handler for WSDepthClient {
                         update::snapshot_depth(self.broker, &self.registry, self.symbol.to_string(), D);
                     }
                     Err(err) => {
-                        println!("cannot unmarshal {} ws depth {}", NAME, err)
+                        let parsedMsg: Result<(u64, String), serde_json::Error> = serde_json::from_str(&msg2);
+                        match parsedMsg {
+                            Ok(parsedMsg_) => {}
+                            Err(err) => {
+                                println!("cannot unmarshal {} ws depth {}", NAME, err)
+                            }
+                        }
                     }
                 }
             }

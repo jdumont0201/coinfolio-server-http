@@ -71,7 +71,7 @@ pub fn fetch_and_write_depth(broker: BROKER, supra: String, infra: String, R: &D
     let rawnameopt = dictionary::read_rawname(broker, supra.to_string(), infra.to_string(), DICT);
     if rawnameopt.is_some() {
         let rawname=rawnameopt.unwrap();
-        println!("rawname {}",rawname);
+        //println!("rawname {}",rawname);
         let fetched: Universal_Orderbook = Universal::fetch_depth(broker, &infra, &supra, DICT);
         let RB = R.get(&key).unwrap();
         if let Ok(mut hm) = RB.write() {
