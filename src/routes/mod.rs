@@ -1,5 +1,4 @@
 use std::thread;
-use OrderbookSide;
 use std::iter::FromIterator;
 use std::collections::HashMap;
 use iron::{Request, Response, Chain, IronResult, Iron};
@@ -12,12 +11,7 @@ use iron;
 use std::cell::RefCell;
 use std::sync::RwLock;
 use router::{Router, NoRoute};
-use BidaskTextRegistry;
-use BidaskReadOnlyRegistry;
-use BidaskRegistry;
-use DataRegistry;
-use TextRegistry;
-use DictRegistry;
+use types::{DataRegistry, TextRegistry, DictRegistry,OrderbookSide,BidaskRegistry, BidaskReadOnlyRegistry, BidaskTextRegistry};
 use Brokers::{BROKER, getEnum, TASK, BROKERS};
 use dictionary::Dictionary;
 use middlewares;
@@ -35,7 +29,7 @@ pub fn start_http_server(RT: &TextRegistry,R:&DataRegistry,DICT:&DictRegistry) {
     let R2b = R.clone();
 
     let DD2=DICT.clone();
-    router.get("/task/arbitrage/budget/:budget/supra/:supra/infra/:infra", move |request: &mut Request| get_infrasupra(request, &R2b,&DD2), "infrasupra");
+    router.get("/task/arbitrage/budget/:budget/supra/:supra/infra/:infra", move |request: &mut Request| get_arbitrage(request, &R2b, &DD2), "infrasupra");
     router.get("/exchange/:broker/task/depth/symbol/:pair", move |request: &mut Request| get_depth(request), "depth");
     let R3=R.clone();
     let DD3=DICT.clone();
@@ -102,7 +96,7 @@ pub fn get_depth(req: &mut Request) -> IronResult<Response> {
     let ref pair: &str = req.extensions.get::<Router>().unwrap().find("pair").unwrap_or("/");
 
     let e = getEnum(broker.to_string()).unwrap();
-    let text = Universal::fetch_depth(e, &pair.to_string());
+    let text = "".to_string();//Universal::fetch_depth(e, &pair.to_string());
 
 
     let mut res = Response::with((status::Ok, text));
@@ -156,7 +150,7 @@ pub fn get_pair(req: &mut Request, R: &DataRegistry) -> IronResult<Response> {
     Ok(res)
 }
 
-pub fn get_infrasupra(req: &mut Request, R: &DataRegistry, DICT: &DictRegistry) -> IronResult<Response> {
+pub fn get_arbitrage(req: &mut Request, R: &DataRegistry, DICT: &DictRegistry) -> IronResult<Response> {
     let ref infra: &str = req.extensions.get::<Router>().unwrap().find("infra").unwrap_or("/");
     let ref supra: &str = req.extensions.get::<Router>().unwrap().find("supra").unwrap_or("/");
     let ref budget: &str = req.extensions.get::<Router>().unwrap().find("budget").unwrap_or("/");
@@ -177,7 +171,7 @@ pub fn get_infrasupra(req: &mut Request, R: &DataRegistry, DICT: &DictRegistry) 
                     match Q {
                         Some(data) => {
 
-                            //println!("{}{}{:?}",broker,pair,data.bids);
+
                             let sti = hmi_to_text(pair.to_string(), data, false);
                             if first {
                                 res = format!("{}\"{}\":{}", res, broker, sti);

@@ -1,43 +1,50 @@
+use hyper;
+use sha2::Sha256;
+use hmac::{Hmac, Mac};
 use ws::connect;
 use serde_json;
 use reqwest;
 use std;
+use types::{DataRegistry, TextRegistry, DictRegistry, OrderbookSide, BidaskRegistry, BidaskReadOnlyRegistry, BidaskTextRegistry};
 use RefreshData;
 use std::collections::HashMap;
-use Brokers::{BROKER, getKey, TASK};
-use DataRegistry;
-use OrderbookSide;
+use dictionary::Dictionary;
+use dictionary;
+use Brokers::{BROKER, getKey, TASK, BROKERS};
+use base64::{encode, decode};
+use std::time::Instant;
 
 pub struct RegistryData {
     pub bid: Option<String>,
     pub ask: Option<String>,
     pub last: Option<String>,
-    orderbook:Universal_Orderbook
+    orderbook: Universal_Orderbook,
 }
-impl RegistryData{
-    pub fn new(bid:Option<String>,ask:Option<String>,last:Option<String>,orderbook:Universal_Orderbook) -> Self{
-        RegistryData {bid:bid,ask:ask,last:last,orderbook:orderbook}
+
+impl RegistryData {
+    pub fn new(bid: Option<String>, ask: Option<String>, last: Option<String>, orderbook: Universal_Orderbook) -> Self {
+        RegistryData { bid: bid, ask: ask, last: last, orderbook: orderbook }
     }
-    pub fn get_bids_mut(&mut self) -> &mut OrderbookSide{
+    pub fn get_bids_mut(&mut self) -> &mut OrderbookSide {
         &mut self.orderbook.bids
     }
-    pub fn get_bids(&self) -> &OrderbookSide{
+    pub fn get_bids(&self) -> &OrderbookSide {
         &self.orderbook.bids
     }
-    pub fn get_asks_mut(&mut self) -> &mut OrderbookSide{
+    pub fn get_asks_mut(&mut self) -> &mut OrderbookSide {
         &mut self.orderbook.asks
     }
-    pub fn get_asks(&self) -> &OrderbookSide{
+    pub fn get_asks(&self) -> &OrderbookSide {
         &self.orderbook.asks
     }
-    pub fn set_bids(&mut self,bids:OrderbookSide){
-        self.orderbook.bids=bids;
+    pub fn set_bids(&mut self, bids: OrderbookSide) {
+        self.orderbook.bids = bids;
     }
-    pub fn set_asks(&mut self,asks:OrderbookSide){
-        self.orderbook.asks=asks;
+    pub fn set_asks(&mut self, asks: OrderbookSide) {
+        self.orderbook.asks = asks;
     }
-    pub fn print(&self){
-       println!("{:?}",self.orderbook.bids)
+    pub fn print(&self) {
+        println!("{:?}", self.orderbook.bids)
     }
 }
 
@@ -49,40 +56,42 @@ pub struct Data {
 
 pub struct Universal_Orderbook {
     pub bids: OrderbookSide,
-    pub asks: OrderbookSide
+    pub asks: OrderbookSide,
 }
-impl Universal_Orderbook{
-    pub fn get_bids_mut(&mut self) -> &OrderbookSide{
+
+impl Universal_Orderbook {
+    pub fn get_bids_mut(&mut self) -> &OrderbookSide {
         &self.bids
     }
-    pub     fn get_bids(&self) -> &OrderbookSide{
+    pub fn get_bids(&self) -> &OrderbookSide {
         &self.bids
     }
-    pub fn get_asks_mut(&mut self) -> &OrderbookSide{
+    pub fn get_asks_mut(&mut self) -> &OrderbookSide {
         &self.asks
     }
-    pub fn get_asks(&self) -> &OrderbookSide{
+    pub fn get_asks(&self) -> &OrderbookSide {
         &self.asks
     }
-    pub fn print(&self){
-        println!("{:?}",self.bids)
+    pub fn print(&self) {
+        println!("{:?}", self.bids)
     }
 }
+
 impl std::fmt::Debug for Universal_Orderbook {
     fn fmt(&self, fmt: &mut std::fmt::Formatter) -> std::fmt::Result {
-        let mut st="";
+        let mut st = "";
         try!(fmt.write_str("bids:["));
-        for i in self.bids.iter(){
+        for i in self.bids.iter() {
             try!(fmt.write_str(st));
-            try!(fmt.write_str(&format!("{:?}",i)));
-            st=",";
+            try!(fmt.write_str(&format!("{:?}", i)));
+            st = ",";
         }
-        let mut st="";
+        let mut st = "";
         try!(fmt.write_str("],asks:["));
-        for i in self.bids.iter(){
+        for i in self.bids.iter() {
             try!(fmt.write_str(st));
-            try!(fmt.write_str(&format!("{:?}",i)));
-            st=",";
+            try!(fmt.write_str(&format!("{:?}", i)));
+            st = ",";
         }
 
         try!(fmt.write_str("]"));
@@ -99,11 +108,11 @@ pub struct Universal_Orderbook_in {
 
 impl std::fmt::Debug for Universal_Orderbook_in {
     fn fmt(&self, fmt: &mut std::fmt::Formatter) -> std::fmt::Result {
-            try!(fmt.write_str("["));
-            try!(fmt.write_str(&self.price));
-            try!(fmt.write_str(","));
-            try!(fmt.write_str(&self.size));
-            try!(fmt.write_str("]"));
+        try!(fmt.write_str("["));
+        try!(fmt.write_str(&self.price));
+        try!(fmt.write_str(","));
+        try!(fmt.write_str(&self.size));
+        try!(fmt.write_str("]"));
         Ok(())
     }
 }
@@ -142,20 +151,27 @@ fn parse_response(task: TASK, broker: BROKER, text: RawHTTPResponse) -> HashMap<
     }
 }
 
-fn parse_response_depth(task: TASK, broker: BROKER, text: String) -> String {
-    let mut r: String = "".to_string();
+fn parse_response_depth(task: TASK, broker: BROKER, text: String) -> Universal_Orderbook {
+    let mut r: Universal_Orderbook;
     match task {
         TASK::HTTP_DEPTH => {
             match broker {
-                BROKER::BINANCE => {
+                BROKER::BINANCE => {//todo
                     let text2 = str::replace(&text, ",[]", "");
-
-                    r = text2;
+                    r = Universal_Orderbook { bids: HashMap::new(), asks: HashMap::new() };
+                    //r = text2;
                 }
-                _ => {}
+                BROKER::KUCOIN => {
+                    r = kucoin::parse_depth(text);
+                }
+                _ => {
+                    r = Universal_Orderbook { bids: HashMap::new(), asks: HashMap::new() };
+                }
             }
         }
-        _ => {}
+        _ => {
+            r = Universal_Orderbook { bids: HashMap::new(), asks: HashMap::new() };
+        }
     }
     r
 }
@@ -182,30 +198,40 @@ pub fn fetch_bidask(broker: BROKER) -> HashMap<String, Data> {
     result
 }
 
-pub fn fetch_depth(broker: BROKER, pair: &String) -> String {
-    //println!("fetch string {}", broker);
-    let url = format!("{}{}", get_url(TASK::HTTP_DEPTH, broker, "".to_string()), pair);
-    let mut result: String;
-    if let Ok(mut res) = reqwest::get(&url) {
-        let getres = match res.text() {
-            Ok(val) => {
-                let v = parse_response_depth(TASK::HTTP_DEPTH, broker, val);
-                println!("{} {}", broker, broker);
-                result = v;
+pub fn fetch_depth(broker: BROKER, infra: &String, supra: &String, DICT: &DictRegistry) -> Universal_Orderbook {
+    let mut result: Universal_Orderbook = Universal_Orderbook { bids: HashMap::new(), asks: HashMap::new() };
+    let rawnameopt = dictionary::read_rawaltname(broker, supra.to_string(), infra.to_string(), DICT);
+    if rawnameopt.is_some() {
+        let rawpair = rawnameopt.unwrap();
+        let url = format!("{}", get_url(TASK::HTTP_DEPTH, broker, rawpair.to_string()));
+//            println!("fetch depth broker={} pair={} url={}", broker, infra, url);
+        let h = get_headers(TASK::HTTP_DEPTH, broker, infra.to_string(), supra.to_string(), "".to_string());
+
+        let client = reqwest::Client::new();
+        match client.get(&url).headers(h).send() {
+            Ok(mut res) => {
+                match res.text() {
+                    Ok(val) => {
+                        parse_response_depth(TASK::HTTP_DEPTH, broker, val)
+                    }
+                    Err(err) => {
+                        println!("[GET_DEPTH] err");
+                        result
+                    }
+                }
             }
             Err(err) => {
-                println!("[GET_DEPTH] err");
-                result = "".to_string()
+                println!("[GET_DEPTH] {:?}", err);
+                result
             }
-        };
+        }
+
     } else {
-        result = "".to_string()
+        result
     }
-    result
 }
 
 pub fn fetch_price(broker: BROKER) -> HashMap<String, Data> {
-    //println!("fetch price {}",broker);
     let url = get_url(TASK::HTTP_PRICE, broker, "".to_string());
     let result: HashMap<String, Data>;
     if let Ok(mut res) = reqwest::get(&url) {
@@ -227,7 +253,7 @@ pub fn fetch_price(broker: BROKER) -> HashMap<String, Data> {
 
 pub fn listen_ws_tick(task: TASK, broker: BROKER) {
     let url = get_url(task, broker, "ethusdt".to_string());
-    println!("listen url {} {}", broker, url);
+    println!("listen url ws_tick {} {}", broker, url);
     match broker {
         BROKER::BINANCE => {
             match connect(url.to_string(), |out| binance::WSTickClient { out: out }) {
@@ -259,7 +285,7 @@ pub fn listen_ws_depth(task: TASK, broker: BROKER, symbol: String, registry: &Da
     }
 }
 
-fn get_url(task: TASK, broker: BROKER, symbol: String) -> String {
+fn get_url(task: TASK, broker: BROKER, pair: String) -> String {
     let mut r = "".to_string();
     match task {
         TASK::HTTP_BIDASK => {
@@ -281,7 +307,11 @@ fn get_url(task: TASK, broker: BROKER, symbol: String) -> String {
         }
         TASK::HTTP_DEPTH => {
             match broker {
-                BROKER::BINANCE => { r = binance::URL_HTTP_PRICE.to_string(); }
+                BROKER::BINANCE => { r = binance::URL_HTTP_DEPTH.to_string(); }
+                BROKER::KUCOIN => {
+                    r = kucoin::URL_HTTP_DEPTH.to_string();
+                    r = str::replace(&r, "XXX", &pair);
+                }
                 _ => {}
             }
         }
@@ -289,7 +319,7 @@ fn get_url(task: TASK, broker: BROKER, symbol: String) -> String {
             match broker {
                 BROKER::BINANCE => {
                     r = binance::URL_WS_TICK.to_string();
-                    r = str::replace(&r, "XXX", &symbol)
+                    r = str::replace(&r, "XXX", &pair);
                 }
                 _ => {}
             }
@@ -298,11 +328,10 @@ fn get_url(task: TASK, broker: BROKER, symbol: String) -> String {
             match broker {
                 BROKER::BINANCE => {
                     r = binance::URL_WS_DEPTH.to_string();
-                    r = str::replace(&r, "XXX", &symbol)
+                    r = str::replace(&r, "XXX", &pair);
                 }
                 BROKER::HITBTC => {
                     r = hitbtc::URL_WS_DEPTH.to_string();
-
                 }
                 _ => {}
             }
@@ -310,4 +339,77 @@ fn get_url(task: TASK, broker: BROKER, symbol: String) -> String {
         _ => {}
     }
     r
+}
+
+fn get_headers(task: TASK, broker: BROKER, infra: String, supra: String, queryString: String) -> hyper::header::Headers {
+    let mut h: hyper::header::Headers = hyper::header::Headers::new();
+    ;
+    match task {
+        TASK::HTTP_BIDASK => {
+            match broker {
+                _ => {}
+            }
+        }
+        TASK::HTTP_PRICE => {
+            match broker {
+                _ => {}
+            }
+        }
+        TASK::HTTP_DEPTH => {
+            match broker {
+                BROKER::KUCOIN => {
+                    let KEY = "5a7ac4eadf542b26bf82ef77";
+                    let SECRET = "e501c6f6-ffcc-491b-852d-ff0f9638aeac";
+                    let endpoint = "/open/orders";
+                    let nonce = get_timestamp();
+                    let strForSign = format!("{}/{}/{}", endpoint, nonce, queryString);
+
+
+                    //init
+                    let mut sha256_HMAC = Hmac::<Sha256>::new(SECRET.as_bytes()).unwrap();
+
+                    //run
+                    let signatureStr = encode(strForSign.as_bytes());
+                    sha256_HMAC.input(signatureStr.as_bytes());
+                    let result = sha256_HMAC.result();
+
+                    let signature = to_hex_string(result.code().to_vec());
+
+
+                    h.set_raw("KC-API-KEY", KEY);
+                    h.set_raw("KC-API-NONCE", nonce.to_string());
+                    h.set_raw("KC-API-SIGNATURE", signature);
+                }
+                _ => {}
+            }
+        }
+        TASK::WS_TICK => {
+            match broker {
+                BROKER::BINANCE => {}
+                _ => {}
+            }
+        }
+        TASK::WS_DEPTH => {
+            match broker {
+                BROKER::BINANCE => {}
+                BROKER::HITBTC => {}
+                _ => {}
+            }
+        }
+        _ => {}
+    }
+    h
+}
+
+fn get_timestamp() -> u64 {
+    let start = Instant::now();
+    let elapsed = start.elapsed();
+    (elapsed.as_secs() * 1_000) + (elapsed.subsec_nanos() / 1_000_000) as u64
+}
+
+pub fn to_hex_string(bytes: Vec<u8>) -> String {
+    let strs: Vec<String> = bytes.iter()
+        .map(|b| format!("{:02X}", b))
+        .collect();
+    strs.connect(" ")
 }

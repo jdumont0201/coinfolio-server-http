@@ -1,13 +1,12 @@
 use std;
 use Data;
 use std::collections::HashMap;
-use OrderbookSide;
 use serde_json;
 use Brokers::BROKER;
 use Universal::Universal_Orderbook;
 use Universal::Universal_Orderbook_in;
 use RefreshData;
-use DataRegistry;
+use types::{DataRegistry, TextRegistry, DictRegistry,OrderbookSide,BidaskRegistry, BidaskReadOnlyRegistry, BidaskTextRegistry};
 use ws::{listen, connect, Handshake, Handler, Sender, Result as wsResult, Message, CloseCode};
 
 static NAME: &str = "hitbtc";

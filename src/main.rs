@@ -1,11 +1,17 @@
 #![allow(non_snake_case)]
 #![allow(non_camel_case_types)]
+#[allow(unused_imports)]
+#[allow(dead_code)]
 
 //LOAD EXTERNAL MODULES
+extern crate base64;
 extern crate iron;
 extern crate ws;
 extern crate time;
 extern crate hyper;
+extern crate hmac;
+extern crate sha2;
+
 extern crate router;
 extern crate chrono;
 extern crate serde;
@@ -13,7 +19,7 @@ extern crate serde_json;
 #[macro_use]
 extern crate serde_derive;
 extern crate reqwest;
-extern crate job_scheduler;
+    extern crate job_scheduler;
 
 //LOAD CUSTOM MODULES
 mod Universal;
@@ -24,7 +30,13 @@ mod arbitrage;
 mod dictionary;
 mod middlewares;
 mod ws_server;
+mod types;
+
+use types::{DataRegistry, TextRegistry, DictRegistry,OrderbookSide,BidaskRegistry, BidaskReadOnlyRegistry, BidaskTextRegistry};
 //SPECIFY NAMESPACES
+use sha2::Sha256;
+use hmac::{Hmac, Mac};
+use base64::{encode, decode};
 
 use iron::{Chain, Request, Iron};
 use iron::{BeforeMiddleware, AfterMiddleware, typemap};
@@ -41,16 +53,6 @@ use chrono::prelude::*;
 use time::Duration;
 use dictionary::{Dictionary,generateReference};
 use Brokers::{BROKER,getKey,getEnum,TASK,BROKERS};
-
-//TYPES FOR SHARED STRUCTURES ACROSS THREADS
-type DataRegistry = HashMap<String,Arc<RwLock<HashMap<String, RegistryData>>>>;
-type TextRegistry = HashMap<String,Arc<RwLock<String>>>;
-type DictRegistry = Arc<RwLock<Dictionary>>;
-type OrderbookSide = HashMap<String,f64>;
-type BidaskRegistry = Arc<Mutex<Option<HashMap<String, HashMap<String, RegistryData>>>>>;
-type BidaskReadOnlyRegistry = Arc<RwLock<Option<HashMap<String, HashMap<String, RegistryData>>>>>;
-type BidaskTextRegistry = Arc<Mutex<Option<HashMap<String, String>>>>;
-
 
 
 //MAIN
@@ -72,6 +74,8 @@ fn main() {
         RT.insert(BROKERS[i].to_string(),Arc::new(RwLock::new(aeit)));
     }
 
+    let DR:DictRegistry=Arc::new(RwLock::new(DICTIONARY.clone()));
+
     //some clones to feed the threads...
     let RT2 = RT.clone();
     let RT3 = RT.clone();
@@ -85,18 +89,17 @@ fn main() {
     let registry5 = R.clone();
     let RT4 = RT.clone();
 
+    let DICT=DR.clone();
     children.push(thread::spawn(move || {
-        let DD:DictRegistry=Arc::new(RwLock::new(DICTIONARY.clone()));
-        routes::start_http_server(&RT2,&R2,&DD);
+        routes::start_http_server(&RT2,&R2,&DICT);
     }));
 
     //"update data" threads
+    let DICT=DR.clone();
     children.push(thread::spawn(move || {
-        start_datarefresh_thread(&R5, &RT3);
+        RefreshData::start_datarefresh_thread(&R5, &RT3,&DR);
     }));
 
-    children.push(thread::spawn(move || {    Universal::listen_ws_depth(TASK::WS_DEPTH, BROKER::BINANCE,"btcusdt".to_string(),&R3);   }));
-    children.push(thread::spawn(move || {    Universal::listen_ws_depth(TASK::WS_DEPTH, BROKER::HITBTC,"BTCUSD".to_string(),&R6); }));
     children.push(thread::spawn(move || {    Universal::listen_ws_depth(TASK::WS_DEPTH, BROKER::BINANCE,"ethusdt".to_string(),&R8);   }));
     children.push(thread::spawn(move || {    Universal::listen_ws_depth(TASK::WS_DEPTH, BROKER::HITBTC,"ETHUSD".to_string(),&R7); }));
 
@@ -114,27 +117,6 @@ fn main() {
     }
 }
 
-fn start_datarefresh_thread(R: &DataRegistry, RT: &TextRegistry) {
-    println!("update data thread");
-    let mut sched = job_scheduler::JobScheduler::new();
-    sched.add(job_scheduler::Job::new("1/2 * * * * *".parse().unwrap(), || {
-        let dt = Local::now();
-        println!("{:?}", dt);
-        for i in 0..BROKERS.len() {
-            let R2 = R.clone();
-            let RT2 = RT.clone();
-            let e = getEnum(BROKERS[i].to_string()).unwrap();
-            thread::spawn(move || { RefreshData::fetch_and_write_bidask(e, &R2, &RT2); });
-        }
-        thread::sleep(std::time::Duration::new(2, 0));
-        let e = getEnum("binance".to_string()).unwrap();
-        RefreshData::fetch_and_write_price(e, R, RT);
-    }));
-    loop {
-        sched.tick();
-        std::thread::sleep(std::time::Duration::from_millis(500));
-    }
-}
 
 
 fn start_websocket_server(){

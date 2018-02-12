@@ -1,12 +1,11 @@
 use std;use Data;
 use std::collections::HashMap;
-use OrderbookSide;
+use types::{DataRegistry, TextRegistry, DictRegistry,OrderbookSide,BidaskRegistry, BidaskReadOnlyRegistry, BidaskTextRegistry};
 use serde_json;
 use Brokers::BROKER;
 use Universal::Universal_Orderbook;
 use Universal::Universal_Orderbook_in;
 use RefreshData;
-use DataRegistry;
 use ws::{listen, connect, Handshake, Handler, Sender, Result as wsResult, Message, CloseCode};
 
 static NAME: &str = "binance";
@@ -149,6 +148,7 @@ impl Handler for WSDepthClient {
     fn on_message(&mut self, msg: Message) -> wsResult<()> {
         let mmm = msg.to_string();
         let mmm = str::replace(&mmm, ",[]", "");
+
         let mm: Result<WSDepth, serde_json::Error> = serde_json::from_str(&mmm);
         match mm {
             Ok(mm_) => {

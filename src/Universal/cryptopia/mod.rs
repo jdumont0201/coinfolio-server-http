@@ -1,7 +1,7 @@
 use Data;
 use std::collections::HashMap;
 use serde_json;
-
+use types::{DataRegistry, TextRegistry, DictRegistry,OrderbookSide,BidaskRegistry, BidaskReadOnlyRegistry, BidaskTextRegistry};
 static NAME:&str="cryptopia";
 pub static URL_HTTP_BIDASK:&str="https://www.cryptopia.co.nz/api/GetMarkets";
 
