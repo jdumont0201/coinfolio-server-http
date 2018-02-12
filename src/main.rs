@@ -79,6 +79,8 @@ fn main() {
     let R3 = R.clone();
     let R4 = R.clone();
     let R6 = R.clone();
+    let R7 = R.clone();
+    let R8 = R.clone();
     let R5 = R.clone();
     let registry5 = R.clone();
     let RT4 = RT.clone();
@@ -92,14 +94,12 @@ fn main() {
     children.push(thread::spawn(move || {
         start_datarefresh_thread(&R5, &RT3);
     }));
-    children.push(thread::spawn(move || {
-        Universal::listen_ws_depth(TASK::WS_DEPTH, BROKER::BINANCE,"btcusdt".to_string(),&R3);
 
-    }));
-    children.push(thread::spawn(move || {
-        thread::sleep(std::time::Duration::new(1, 0));
-        Universal::listen_ws_depth(TASK::WS_DEPTH, BROKER::HITBTC,"BTCUSD".to_string(),&R6);
-    }));
+    children.push(thread::spawn(move || {    Universal::listen_ws_depth(TASK::WS_DEPTH, BROKER::BINANCE,"btcusdt".to_string(),&R3);   }));
+    children.push(thread::spawn(move || {    Universal::listen_ws_depth(TASK::WS_DEPTH, BROKER::HITBTC,"BTCUSD".to_string(),&R6); }));
+    children.push(thread::spawn(move || {    Universal::listen_ws_depth(TASK::WS_DEPTH, BROKER::BINANCE,"ethusdt".to_string(),&R8);   }));
+    children.push(thread::spawn(move || {    Universal::listen_ws_depth(TASK::WS_DEPTH, BROKER::HITBTC,"ETHUSD".to_string(),&R7); }));
+
 
     children.push(thread::spawn(move || {
         thread::sleep(std::time::Duration::new(1, 0));

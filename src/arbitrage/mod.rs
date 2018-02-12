@@ -9,13 +9,63 @@ use routes::orderbook_to_ordered;
 use std::collections::HashMap;
 use chrono::offset::{TimeZone, Utc};
 
+
+#[derive(Clone)]
+pub struct Portfolio {
+    pub qty: f64,
+    pub asset: String,
+    pub value: f64,
+}
+
+impl Portfolio {
+    fn print(&self) {
+        println!("{} {} = {}", self.qty, self.asset, self.value)
+    }
+    fn to_json(&self) -> String{
+        format!("{{\"qty\":{},\"asset\":\"{}\",\"value\":{} }}", self.qty, self.asset, self.value)
+    }
+}
+
 pub struct Operations {
-    operations: Transactions,
+    operations: Vec<TransactionResult>,
     name: String,
     profit: f64,
     profitpc: f64,
+    recap: Vec<String>,
 }
 
+impl Operations {
+    fn get_recap(&mut self) {
+        let T1=&self.operations[0];
+        let T2=&self.operations[1];
+        let T3=&self.operations[2];
+        let T4=&self.operations[3];
+        self.recap =
+            vec![
+                format!("{} {}{}@{} at {}", T1.transaction.typ, T1.transaction.supra, T1.transaction.infra, T1.transaction.broker, T1.transaction.meanPrice),
+                format!("{} {}{}@{}", T2.transaction.typ, T2.transaction.supra, T2.transaction.infra, T2.transaction.broker),
+                format!("{} {}{}@{}", T3.transaction.typ, T3.transaction.supra, T3.transaction.infra, T3.transaction.broker),
+                format!("{} {}{}@{} at {}", T4.transaction.typ, T4.transaction.supra, T4.transaction.infra, T4.transaction.broker, T4.transaction.meanPrice),
+            ];
+    }
+    fn to_json(&mut self )-> String{ 
+        self.get_recap();
+        let mut ordersstr = format!("{{\"profit\":\"{}\",\"profit_pc\":\"{}\",\"best\":[",self.profit,self.profitpc);
+        let mut st = "";
+        for i in self.recap.iter() {
+            ordersstr = format!("{}{}\"{}\"", ordersstr, st,i);
+            st = ",";
+        }
+        ordersstr = format!("{}],\"best_operations\":[",ordersstr);
+        let mut st = "";
+        for i in self.operations.iter() {
+            ordersstr = format!("{}{}{{\"transaction\":{},\"result\":{} }}", ordersstr, st,i.transaction.to_json(), i.portfolio.to_json());
+            st = ",";
+        }
+        ordersstr = format!("{}]}}", ordersstr);
+        ordersstr
+    }
+}
 pub struct Transactions {
     transactions: HashMap<String, Transaction>,
     bestVal: f64,
@@ -23,6 +73,7 @@ pub struct Transactions {
     best_recap: String,
     name: String,
     symbol: String,
+
     typ: String,
     meanPrice: f64,
 }
@@ -48,16 +99,19 @@ impl Transactions {
         }
     }
 }
-
-struct Transaction {
+#[derive(Clone)]
+pub struct Transaction {
     broker: String,
-
+    typ: String,
     budget: f64,
     commission: f64,
     commission_transfer: f64,
     tradingBudget: f64,
     orders: Vec<Level>,
     meanPrice: f64,
+    infra:String,
+    supra:String,
+
     remainer: f64,
     quantityTotal: f64,
     value: f64,
@@ -73,10 +127,10 @@ impl Transaction {
         }
         ordersstr = format!("{}]", ordersstr);
 
-        format!("\"{}\":{{\"budget\":{}, \"commissionTrading\":{},\"commissionTransfer\":{},\"tradingBudget\":{},\"orders\":{},\"meanPrice\":{},\"quantityExchanged\":{},\"remainer\":{},\"value\":{} }}", self.broker, self.budget, self.commission,self.commission_transfer, self.tradingBudget, ordersstr, self.meanPrice, self.quantityTotal, self.remainer, self.value)
+        format!("{{ \"broker\":\"{}\",\"budget\":{}, \"commissionTrading\":{},\"commissionTransfer\":{},\"tradingBudget\":{},\"orders\":{},\"meanPrice\":{},\"quantityExchanged\":{},\"remainer\":{},\"value\":{} }}", self.broker, self.budget, self.commission, self.commission_transfer, self.tradingBudget, ordersstr, self.meanPrice, self.quantityTotal, self.remainer, self.value)
     }
 }
-
+#[derive(Clone)]
 struct Level {
     qty: f64,
     price: f64,
@@ -96,41 +150,252 @@ pub fn recap(budget: f64, infra: String, supra: String, R: &DataRegistry, DICT: 
     let mut cheapestBroker: String;
     let mut cheapestAsk: Vec<(f64, f64)>;
 
-    let TTB = optimize_single_buy(budget, infra.to_string(), supra.to_string(), R, DICT);
+    let mut O=optimize_single(budget, infra, supra, R, DICT);
+    O.to_json()
+    /*    let TTB = optimize_single_buy(budget, infra.to_string(), supra.to_string(), R, DICT);
 
 
-    match TTB.best {
-        Some(ref best_) => {
-            let BEST = TTB.transactions.get(best_).unwrap();
-            let newbudget = BEST.quantityTotal;
+        match TTB.best {
+            Some(ref best_) => {
+                let BEST = TTB.transactions.get(best_).unwrap();
+                let newbudget = BEST.quantityTotal;
 
 
-            println!("OP2 SELL");
-            let TTS = optimize_single_sell(newbudget, infra.to_string(), supra.to_string(), R, DICT);
+                println!("OP2 SELL");
+                let TTS = optimize_single_sell(newbudget, infra.to_string(), supra.to_string(), R, DICT);
 
-            match TTS.best {
-                Some(ref bests_) => {
-                    let BESTS = TTS.transactions.get(bests_).unwrap();
-                    let profit = BESTS.value - BEST.value;
-                    let profit_pc = (profit / BEST.value) * 100.;
-                    let d2 = Utc::now();
-                    let duration = d2.signed_duration_since(d1);
+                match TTS.best {
+                    Some(ref bests_) => {
+                        let BESTS = TTS.transactions.get(bests_).unwrap();
+                        let profit = BESTS.value - BEST.value;
+                        let profit_pc = (profit / BEST.value) * 100.;
+                        let d2 = Utc::now();
+                        let duration = d2.signed_duration_since(d1);
 
-                    let ms = duration.num_microseconds().unwrap();
-                    let ms: f64 = ms as f64 / 1000.;
+                        let ms = duration.num_microseconds().unwrap();
+                        let ms: f64 = ms as f64 / 1000.;
 
 
-                    format!("{{\"computationTime_ms\":{},\"budget\":{},\"profit\":{},\"profit_pc\":{},\"recap\":[\"{}\",\"TRANSFER to {}\",\"{}\"],\"transactions\":[{{\"name\":\"first buy\",\"result\":{} }},{{\"name\":\"sell\",\"result\":{} }}]}}", ms, budget, profit, profit_pc, TTB.best_recap,TTS.best.as_ref().unwrap(),TTS.best_recap,TTB.to_json(), TTS.to_json())
-                }
-                None => {
-                    format!("[{{\"operation\":\"first buy\",\"result\":{} }} }}]", TTB.to_json())
+                        format!("{{\"computationTime_ms\":{},\"budget\":{},\"profit\":{},\"profit_pc\":{},\"recap\":[\"{}\",\"TRANSFER to {}\",\"{}\"],\"transactions\":[{{\"name\":\"first buy\",\"result\":{} }},{{\"name\":\"sell\",\"result\":{} }}]}}", ms, budget, profit, profit_pc, TTB.best_recap, TTS.best.as_ref().unwrap(), TTS.best_recap, TTB.to_json(), TTS.to_json())
+                    }
+                    None => {
+                        format!("[{{\"operation\":\"first buy\",\"result\":{} }} }}]", TTB.to_json())
+                    }
                 }
             }
+            None => {
+                format!("[{{\"operation\":\"first buy\",\"result\":{} }} }}]", TTB.to_json())
+            }
         }
-        None => {
-            format!("[{{\"operation\":\"first buy\",\"result\":{} }} }}]", TTB.to_json())
+        */
+}
+
+
+pub fn optimize_single(budget: f64, infra: String, supra: String, R: &DataRegistry, DICT: &DictRegistry) -> Operations {
+    let mut O = Operations { operations: Vec::new(), recap: Vec::new(), name: "Buy sell".to_string(), profit: -10000000., profitpc: 0. };
+    for i in 0..BROKERS.len() {//for each broker
+        let broker: &str = BROKERS[i];
+        let mut TT = Transactions { typ: "BUY".to_string(), meanPrice: 0., best_recap: "".to_string(), name: format!("Buy {}/{}", supra.to_string(), infra.to_string()), symbol: format!("{}{}", supra, infra), transactions: HashMap::new(), bestVal: 1000000000., best: None };
+        let RB = R.get(broker).unwrap();
+        if infra == "USD" {
+            if let Ok(D) = DICT.read() { //open dictionary to find broker name of the pair
+                let DD: &Dictionary = &*D;
+                let pairopt = DD.infrasupraToRawName(broker, &infra, &supra);
+                if pairopt.is_some() {//if pair exists
+                    let pair = pairopt.unwrap();
+                    if let Ok(hm) = RB.read() { //read registry for this pair
+                        let dataOption: Option<&RegistryData> = hm.get(&pair.to_string());
+                        match dataOption {
+                            Some(data) => {
+                                let origin = Portfolio { qty: budget, asset: "USD".to_string(), value: budget };
+                                let T1 = getBuyTransaction(&origin, data, broker.to_string(), infra.to_string(), supra.to_string());
+                                let T2 = getWithdrawTransaction(&T1.clone().portfolio, data, broker.to_string(), infra.to_string(), supra.to_string());
+                                for j in 0..BROKERS.len() {//for each broker
+                                    if i != j {
+                                        let broker2: &str = BROKERS[j];
+                                        let T3 = getDepositTransaction(&T2.clone().portfolio, data, broker2.to_string(), infra.to_string(), supra.to_string());
+                                        let T4 = getSellTransaction(&T3.clone().portfolio, data, broker2.to_string(), infra.to_string(), supra.to_string());
+                                        let profit = T4.portfolio.value - budget;
+                                        if profit > O.profit {
+                                            println!("update p");
+                                            O.profit = profit;
+                                            O.profitpc = profit / budget * 100.;
+                                            O.operations = vec![T1.clone(), T2.clone(), T3, T4];
+                                        }
+                                        println!("{} -> {} = {}", broker, broker2, profit);
+                                    }
+                                }
+                            }
+                            None => {}
+                        }
+                    }
+                }
+            } else {}
         }
     }
+    O
+}
+#[derive(Clone)]
+pub struct TransactionResult {
+    pub portfolio: Portfolio,
+    pub transaction: Transaction,
+}
+
+pub fn getDepositTransaction(ptf: &Portfolio, data: &RegistryData, broker: String, infra: String, supra: String) -> TransactionResult {
+    let mut T = Transaction {
+        broker: broker.to_string(),
+        budget: ptf.qty,
+        commission: 0.,
+        typ: "DEPOSIT".to_string(),
+        commission_transfer: 0.,
+        tradingBudget: ptf.qty,
+        orders: Vec::new(),infra:infra.to_string(),
+        supra:supra.to_string(),
+        meanPrice: 0.,
+        value: 0.,
+        quantityTotal: 0.,
+        remainer: 0.,
+    };
+    T.commission_transfer = get_deposit_commission(broker.to_string(), ptf.qty);
+    let q = ptf.qty - T.commission_transfer;
+    let v = ptf.value * q / ptf.qty;
+    TransactionResult { portfolio: Portfolio { qty: q, value: v, asset: supra }, transaction: T }
+}
+
+pub fn getWithdrawTransaction(ptf: &Portfolio, data: &RegistryData, broker: String, infra: String, supra: String) -> TransactionResult {
+    let mut T = Transaction {
+        broker: broker.to_string(),
+        budget: ptf.qty,
+        commission: 0.,
+        typ: "WITHDRAW".to_string(),
+        commission_transfer: 0.,infra:infra.to_string(),
+        supra:supra.to_string(),
+        tradingBudget: ptf.qty,
+        orders: Vec::new(),
+        meanPrice: 0.,
+        value: 0.,
+        quantityTotal: 0.,
+        remainer: 0.,
+    };
+    T.commission_transfer = get_withdraw_commission(broker.to_string(), ptf.asset.to_string(), ptf.qty);
+    let q = ptf.qty - T.commission_transfer;
+    let v = ptf.value * q / ptf.qty;
+    TransactionResult { portfolio: Portfolio { qty: q, value: v, asset: supra }, transaction: T }
+}
+
+pub fn getSellTransaction(ptf: &Portfolio, data: &RegistryData, broker: String, infra: String, supra: String) -> TransactionResult {
+    let commissionBrokerTrading = 0.001;
+    let budgetAvailable = ptf.qty;
+    let BIDS = data.get_bids();
+    let ordered: Vec<(f64, String, f64)> = orderbook_to_ordered(BIDS, true);
+    let mut budres = budgetAvailable;
+    let mut qtyres = 0.;
+    let mut quantitySold = 0.;
+    let mut meanPrice = 0.;
+    let mut earnings = 0.;
+    let mut T = Transaction {
+        broker: broker.to_string(),
+        budget: ptf.qty,
+        typ: "SELL".to_string(),
+        commission: 0.,
+        commission_transfer: 0.,
+        tradingBudget: budgetAvailable,
+        orders: Vec::new(),
+        meanPrice: 0.,infra:infra.to_string(),
+        supra:supra.to_string(),
+        quantityTotal: 0.,
+        value: 0.,
+        remainer: 0.,
+    };
+
+    for &(ref price, ref pricestr, ref size) in ordered.iter() {
+        if budres <= 0.000000001 { break }
+        let levelQty = *size;
+        let levelPrice = *price;
+        let mut operationQuantitySold;
+
+        let sellable = budres;
+        if levelQty > sellable {
+            operationQuantitySold = budres;
+        } else {
+            operationQuantitySold = levelQty;
+        }
+        operationQuantitySold = operationQuantitySold;
+        let operationEarnings = operationQuantitySold * levelPrice;
+        earnings = earnings + operationEarnings;
+        T.orders.push(Level { qty: operationQuantitySold, price: levelPrice, value: operationEarnings });
+        quantitySold = quantitySold + operationQuantitySold;
+        meanPrice = meanPrice + levelPrice * operationQuantitySold;
+        budres = budres - operationQuantitySold;
+    }
+    T.commission = earnings * commissionBrokerTrading;
+    T.commission_transfer = get_deposit_commission(broker.to_string(), earnings);
+    meanPrice = meanPrice / quantitySold;
+    T.quantityTotal = quantitySold;
+    let residual = earnings - T.commission_transfer - T.commission;
+    T.meanPrice = meanPrice;
+    T.remainer = budres;
+
+    T.value = residual;
+    TransactionResult { portfolio: Portfolio { qty: T.quantityTotal, value: T.value, asset: supra }, transaction: T }
+}
+
+pub fn getBuyTransaction(ptf: &Portfolio, data: &RegistryData, broker: String, infra: String, supra: String) -> TransactionResult {
+    let commissionBrokerTrading = 0.001;
+    let budgetAvailable = ptf.value;
+    let ASKS = data.get_asks();
+    let ordered: Vec<(f64, String, f64)> = orderbook_to_ordered(ASKS, false);
+    let mut budres = budgetAvailable;
+    let mut qtyres = 0.;
+    let mut quantityBought = 0.;
+    let mut meanPrice = 0.;
+    let mut invested = 0.;
+    let mut T = Transaction {
+        broker: broker.to_string(),
+        budget: ptf.qty,
+        typ: "BUY".to_string(),
+        infra:infra.to_string(),
+        supra:supra.to_string(),
+
+        commission: 0.,
+        commission_transfer: 0.,
+        tradingBudget: budgetAvailable,
+        orders: Vec::new(),
+        meanPrice: 0.,
+        value: 0.,
+        quantityTotal: 0.,
+        remainer: 0.,
+    };
+
+    for &(ref price, ref pricestr, ref size) in ordered.iter() {
+        if budres <= 0.000000001 { break }
+        let levelQty = *size;
+        let levelPrice = *price;
+        let mut operationQuantityBought;
+        let buyable = budres / levelPrice;
+        if levelQty > buyable {
+            operationQuantityBought = buyable;
+        } else {
+            operationQuantityBought = levelQty;
+        }
+        operationQuantityBought = operationQuantityBought;//commission
+        let operationCost = operationQuantityBought * levelPrice;
+        T.orders.push(Level { qty: operationQuantityBought, price: levelPrice, value: operationCost });
+        invested = invested + operationCost;
+        quantityBought = quantityBought + operationQuantityBought;
+        // meanPrice = meanPrice + levelPrice * operationQuantityBought;
+        budres = budres - operationCost;
+    }
+    T.commission = invested * commissionBrokerTrading;
+    T.commission_transfer = get_withdraw_commission(broker.to_string(), supra.to_string(), invested);
+    let residual = invested - T.commission_transfer - T.commission;
+    meanPrice = invested / quantityBought; //meanPrice / quantityBought;
+    T.quantityTotal = quantityBought;
+    T.meanPrice = meanPrice;
+    T.remainer = budres;
+    T.value = T.remainer + residual - T.commission_transfer;
+    T.commission = T.value * commissionBrokerTrading;
+    TransactionResult { portfolio: Portfolio { qty: T.quantityTotal, value: T.value, asset: supra }, transaction: T }
 }
 
 pub fn optimize_single_buy(budget: f64, infra: String, supra: String, R: &DataRegistry, DICT: &DictRegistry) -> Transactions {
@@ -162,8 +427,11 @@ pub fn optimize_single_buy(budget: f64, infra: String, supra: String, R: &DataRe
                                     budget: budget,
                                     commission: 0.,
                                     commission_transfer: 0.,
+                                    typ: "BUY".to_string(),
                                     tradingBudget: budgetAvailable,
                                     orders: Vec::new(),
+                                    infra:infra.to_string(),
+                                    supra:supra.to_string(),
                                     meanPrice: 0.,
                                     value: 0.,
                                     quantityTotal: 0.,
@@ -182,19 +450,19 @@ pub fn optimize_single_buy(budget: f64, infra: String, supra: String, R: &DataRe
                                     } else {
                                         operationQuantityBought = levelQty;
                                     }
-                                    operationQuantityBought=operationQuantityBought ;//commission
+                                    operationQuantityBought = operationQuantityBought;//commission
                                     let operationCost = operationQuantityBought * levelPrice;
                                     T.orders.push(Level { qty: operationQuantityBought, price: levelPrice, value: operationCost });
-                                    invested=invested+operationCost;
+                                    invested = invested + operationCost;
                                     quantityBought = quantityBought + operationQuantityBought;
-                                   // meanPrice = meanPrice + levelPrice * operationQuantityBought;
+                                    // meanPrice = meanPrice + levelPrice * operationQuantityBought;
                                     budres = budres - operationCost;
                                     println!("    {} buy {} {} {} {} ", broker, levelQty, levelPrice, operationCost, operationQuantityBought);
                                 }
-                                T.commission=invested *  commissionBrokerTrading;
-                                T.commission_transfer=get_withdraw_commission(broker.to_string(),supra.to_string(),invested);
-                                let residual = invested-T.commission_transfer-T.commission;
-                                meanPrice = quantityBought/residual; //meanPrice / quantityBought;
+                                T.commission = invested * commissionBrokerTrading;
+                                T.commission_transfer = get_withdraw_commission(broker.to_string(), supra.to_string(), invested);
+                                let residual = invested - T.commission_transfer - T.commission;
+                                meanPrice = quantityBought / residual; //meanPrice / quantityBought;
 
                                 T.quantityTotal = quantityBought;
                                 T.meanPrice = meanPrice;
@@ -202,7 +470,7 @@ pub fn optimize_single_buy(budget: f64, infra: String, supra: String, R: &DataRe
 
                                 println!("com{}{}", quantityBought, commissionBrokerTrading);
 
-                                T.value = T.remainer+ residual - T.commission_transfer;
+                                T.value = T.remainer + residual - T.commission_transfer;
                                 T.commission = T.value * commissionBrokerTrading;
                                 let mut active = T.quantityTotal > 0.;
                                 if active {
@@ -258,12 +526,15 @@ pub fn optimize_single_sell(budget: f64, infra: String, supra: String, R: &DataR
                                 let mut T = Transaction {
                                     broker: broker.to_string(),
                                     budget: budget,
-                                    commission:0.,
-                                    commission_transfer:0.,
+                                    commission: 0.,
+                                    infra:infra.to_string(),
+                                    supra:supra.to_string(),
+                                    commission_transfer: 0.,
                                     tradingBudget: budgetAvailable,
                                     orders: Vec::new(),
                                     meanPrice: 0.,
                                     quantityTotal: 0.,
+                                    typ: "SELL".to_string(),
                                     value: 0.,
                                     remainer: budget,
                                 };
@@ -281,7 +552,7 @@ pub fn optimize_single_sell(budget: f64, infra: String, supra: String, R: &DataR
                                     } else {
                                         operationQuantitySold = levelQty;
                                     }
-                                    operationQuantitySold=operationQuantitySold;
+                                    operationQuantitySold = operationQuantitySold;
                                     let operationEarnings = operationQuantitySold * levelPrice;
                                     earnings = earnings + operationEarnings;
                                     T.orders.push(Level { qty: operationQuantitySold, price: levelPrice, value: operationEarnings });
@@ -290,11 +561,11 @@ pub fn optimize_single_sell(budget: f64, infra: String, supra: String, R: &DataR
                                     budres = budres - operationQuantitySold;
                                     println!("    {} sell {} {} {} {} ", broker, levelQty, levelPrice, operationEarnings, operationQuantitySold);
                                 }
-                                T.commission=earnings * commissionBrokerTrading;
-                                T.commission_transfer=get_deposit_commission(broker.to_string(),earnings);
+                                T.commission = earnings * commissionBrokerTrading;
+                                T.commission_transfer = get_deposit_commission(broker.to_string(), earnings);
                                 meanPrice = meanPrice / quantitySold;
                                 T.quantityTotal = quantitySold;
-                                let residual = earnings-T.commission_transfer-T.commission;
+                                let residual = earnings - T.commission_transfer - T.commission;
                                 T.meanPrice = meanPrice;
                                 T.remainer = budres;
 
@@ -353,140 +624,142 @@ fn get_deposit_commission(broker: String, value: f64) -> f64 {
 fn get_withdraw_commission(broker: String, symbol: String, value: f64) -> f64 {
     match broker.as_ref() {
         "binance" => {
-            match symbol{
-                BNB=>0.92,
-                BTC=>0.001 ,
-                NEO=>0. ,
-                ETH=>0.01,
-                LTC=>0.01,
-                QTUM=>0.01,
-                EOS=>1.,
-                SNT=>39. ,
-                BNT=>1.7 ,
-                GAS=>0. ,
-                BCC=>0.001,
-                BTM=>5. ,
-                USDT=>17.1,
-                HCC=>0.0005,
-                HSR=>0.0001 ,
-                OAX=>12.4 ,
-                DNT=>104. ,
-                MCO=>1.17 ,
-                ICN=>5.3 ,
-                ZRX=>7.8 ,
-                OMG=>0.69 ,
-                WTC=>0.4 ,
-                LRC=>13. ,
-                LLT=>67.8,
-                YOYO=>52. ,
-                TRX=>178.  ,
-                STRAT=>0.1 ,
-                SNGLS=>59. ,
-                BQX=>2.1 ,
-                KNC=>2.7 ,
-                SNM=>38. ,
-                FUN=>150. ,
-                LINK=>20.5,
-                XVG=>0.1 ,
-                CTR=>9.5 ,
-                SALT=>2. ,
-                MDA=>6.5 ,
-                IOTA=>0.5 ,
-                SUB=>12.2 ,
-                ETC=>0.01 ,
-                MTL=>2.2 ,
-                MTH=>57. ,
-                ENG=>3. ,
-                AST=>13.9,
-                DASH=>0.002 ,
-                BTG=>0.001 ,
-                EVX=>4.9 ,
-                REQ=>30.8 ,
-                VIB=>35. ,
-                POWR=>11.4,
-                ARK=>0.1 ,
-                XRP=>0.25 ,
-                MOD=>3. ,
-                ENJ=>58. ,
-                STORJ=>8.6,
-                VEN=>2. ,
-                KMD=>0.002 ,
-                RCN=>48. ,
-                NULS=>3.4,
-                RDN=>3.2 ,
-                XMR=>0.04 ,
-                DLT=>28.4 ,
-                AMB=>15.9 ,
-                BAT=>24. ,
-                ZEC=>0.005,
-                BCPT=>18. ,
-                ARN=>5.3 ,
-                GVT=>0.59 ,
-                CDT=>92. ,
-                GXS=>0.3 ,
-                POE=>148. ,
-                QSP=>30. ,
-                BTS=>1. ,
-                XZC=>0.02,
-                LSK=>0.1 ,
-                TNT=>59. ,
-                FUEL=>71. ,
-                MANA=>76.,
-                BCD=>1. ,
-                DGD=>0.04,
-                ADX=>5.8,
-                ADA=>1. ,
-                PPT=>0.33,
-                CMT=>47. ,
-                XLM=>0.01,
-                CND=>48. ,
-                LEND=>100. ,
-                WABI=>5.5 ,
-                SBTC=>1.,
-                BCX=>1.,
-                WAVES=>0.002,
-                TNB=>118. ,
-                GTO=>35. ,
-                ICX=>2.1 ,
-                OST=>30. ,
-                ELF=>7. ,
-                AION=>3.1,
-                ETF=>1. ,
-                BRD=>10.5 ,
-                NEBL=>0.01 ,
-                VIBE=>18.7 ,
-                LUN=>0.46 ,
-                CHAT=>31.5,
-                RLC=>6.1 ,
-                INS=>3.8 ,
-                IOST=>214.6 ,
-                STEEM=>0.01,
-                NANO=>0.01,
-                AE=>3.2 ,
-                VIA=>0.01,
-                BLZ=>14. ,
-                EDO=>4.3 ,
-                WINGS=>13.7,
-                NAV=>0.2 ,
-                TRIG=>9.1 ,
-                APPC=>13.5 ,
-                PIVX=>0.02,
+            match symbol.as_ref() {
+                "BNB" => { 0.92 }
+                "BTC" => { 0.001 }
+                "NEO" => { 0. }
+                "ETH" => { 0.01 }
+                "LTC" => { 0.01 }
+                "QTUM" => { 0.01 }
+                "EOS" => { 1. }
+                "SNT" => { 39. }
+                "BNT" => { 1.7 }
+                "GAS" => { 0. }
+                "BCC" => { 0.001 }
+                "BTM" => { 5. }
+                "USDT" => { 17.1 }
+                "HCC" => { 0.0005 }
+                "HSR" => { 0.0001 }
+                "OAX" => { 12.4 }
+                "DNT" => { 104. }
+                "MCO" => { 1.17 }
+                "ICN" => { 5.3 }
+                "ZRX" => { 7.8 }
+                "OMG" => { 0.69 }
+                "WTC" => { 0.4 }
+                "LRC" => { 13. }
+                "LLT" => { 67.8 }
+                "YOYO" => { 52. }
+                "TRX" => { 178. }
+                "STRAT" => { 0.1 }
+                "SNGLS" => { 59. }
+                "BQX" => { 2.1 }
+                "KNC" => { 2.7 }
+                "SNM" => { 38. }
+                "FUN" => { 150. }
+                "LINK" => { 20.5 }
+                "XVG" => { 0.1 }
+                "CTR" => { 9.5 }
+                "SALT" => { 2. }
+                "MDA" => { 6.5 }
+                "IOTA" => { 0.5 }
+                "SUB" => { 12.2 }
+                "ETC" => { 0.01 }
+                "MTL" => { 2.2 }
+                "MTH" => { 57. }
+                "ENG" => { 3. }
+                "AST" => { 13.9 }
+                "DASH" => { 0.002 }
+                "BTG" => { 0.001 }
+                "EVX" => { 4.9 }
+                "REQ" => { 30.8 }
+                "VIB" => { 35. }
+                "POWR" => { 11.4 }
+                "ARK" => { 0.1 }
+                "XRP" => { 0.25 }
+                "MOD" => { 3. }
+                "ENJ" => { 58. }
+                "STORJ" => { 8.6 }
+                "VEN" => { 2. }
+                "KMD" => { 0.002 }
+                "RCN" => { 48. }
+                "NULS" => { 3.4 }
+                "RDN" => { 3.2 }
+                "XMR" => { 0.04 }
+                "DLT" => { 28.4 }
+                "AMB" => { 15.9 }
+                "BAT" => { 24. }
+                "ZEC" => { 0.005 }
+                "BCPT" => { 18. }
+                "ARN" => { 5.3 }
+                "GVT" => { 0.59 }
+                "CDT" => { 92. }
+                "GXS" => { 0.3 }
+                "POE" => { 148. }
+                "QSP" => { 30. }
+                "BTS" => { 1. }
+                "XZC" => { 0.02 }
+                "LSK" => { 0.1 }
+                "TNT" => { 59. }
+                "FUEL" => { 71. }
+                "MANA" => { 76. }
+                "BCD" => { 1. }
+                "DGD" => { 0.04 }
+                "ADX" => { 5.8 }
+                "ADA" => { 1. }
+                "PPT" => { 0.33 }
+                "CMT" => { 47. }
+                "XLM" => { 0.01 }
+                "CND" => { 48. }
+                "LEND" => { 100. }
+                "WABI" => { 5.5 }
+                "SBTC" => { 1. }
+                "BCX" => { 1. }
+                "WAVES" => { 0.002 }
+                "TNB" => { 118. }
+                "GTO" => { 35. }
+                "ICX" => { 2.1 }
+                "OST" => { 30. }
+                "ELF" => { 7. }
+                "AION" => { 3.1 }
+                "ETF" => { 1. }
+                "BRD" => { 10.5 }
+                "NEBL" => { 0.01 }
+                "VIBE" => { 18.7 }
+                "LUN" => { 0.46 }
+                "CHAT" => { 31.5 }
+                "RLC" => { 6.1 }
+                "INS" => { 3.8 }
+                "IOST" => { 214.6 }
+                "STEEM" => { 0.01 }
+                "NANO" => { 0.01 }
+                "AE" => { 3.2 }
+                "VIA" => { 0.01 }
+                "BLZ" => { 14. }
+                "EDO" => { 4.3 }
+                "WINGS" => { 13.7 }
+                "NAV" => { 0.2 }
+                "TRIG" => { 9.1 }
+                "APPC" => { 13.5 }
+                "PIVX" => { 0.02 }
+                _ => { 0. }
             }
         }
         "hitbtc" => {
-            match symbol {
-                BTC => 0.00085,
-                BCC => 0.0018,
-                ETH => 0.00215,
-                ETC => 0.002,
-                USDT => 100.,
-                STRAT => 0.01,
-                LTC => 0.003,
-                DASH => 0.03,
-                XMR => 0.09,
-                BCN => 0.1,
-                ARDR => 1.,
-                STEEM => 0.01,
+            match symbol.as_ref() {
+                "BTC" => { 0.00085 }
+                "BCC" => { 0.0018 }
+                "ETH" => { 0.00215 }
+                "ETC" => { 0.002 }
+                "USDT" => { 100. }
+                "STRAT" => { 0.01 }
+                "LTC" => { 0.003 }
+                "DASH" => { 0.03 }
+                "XMR" => { 0.09 }
+                "BCN" => { 0.1 }
+                "ARDR" => { 1. }
+                "STEEM" => { 0.01 }
+                _ => { 0. }
             }
         }
         _ => {

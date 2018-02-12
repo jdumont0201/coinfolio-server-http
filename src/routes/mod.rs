@@ -35,7 +35,7 @@ pub fn start_http_server(RT: &TextRegistry,R:&DataRegistry,DICT:&DictRegistry) {
     let R2b = R.clone();
 
     let DD2=DICT.clone();
-    router.get("/task/arbitrage/supra/:supra/infra/:infra", move |request: &mut Request| get_infrasupra(request, &R2b,&DD2), "infrasupra");
+    router.get("/task/arbitrage/budget/:budget/supra/:supra/infra/:infra", move |request: &mut Request| get_infrasupra(request, &R2b,&DD2), "infrasupra");
     router.get("/exchange/:broker/task/depth/symbol/:pair", move |request: &mut Request| get_depth(request), "depth");
     let R3=R.clone();
     let DD3=DICT.clone();
@@ -159,6 +159,7 @@ pub fn get_pair(req: &mut Request, R: &DataRegistry) -> IronResult<Response> {
 pub fn get_infrasupra(req: &mut Request, R: &DataRegistry, DICT: &DictRegistry) -> IronResult<Response> {
     let ref infra: &str = req.extensions.get::<Router>().unwrap().find("infra").unwrap_or("/");
     let ref supra: &str = req.extensions.get::<Router>().unwrap().find("supra").unwrap_or("/");
+    let ref budget: &str = req.extensions.get::<Router>().unwrap().find("budget").unwrap_or("/");
 
     let mut res: String = "{".to_string();
     let mut first = true;
@@ -175,9 +176,7 @@ pub fn get_infrasupra(req: &mut Request, R: &DataRegistry, DICT: &DictRegistry) 
                     let Q: Option<&RegistryData> = hm.get(&pair.to_string());
                     match Q {
                         Some(data) => {
-                            for (price, size) in data.get_bids().iter() {
-                                println!("req{}{}", price, size);
-                            }
+
                             //println!("{}{}{:?}",broker,pair,data.bids);
                             let sti = hmi_to_text(pair.to_string(), data, false);
                             if first {
@@ -198,7 +197,7 @@ pub fn get_infrasupra(req: &mut Request, R: &DataRegistry, DICT: &DictRegistry) 
 
 
     res = format!("{}}}", res);
-    let arbi=recap(1000.,infra.to_string(),supra.to_string(),&R,&DICT);;
+    let arbi=recap(budget.parse::<f64>().unwrap(),infra.to_string(),supra.to_string(),&R,&DICT);;
     let fina=format!("{{\"arbitrage\":{},\"market\":{}}}",arbi,res);
     let mut res = Response::with((status::Ok, fina));
     res.headers.set(iron::headers::AccessControlAllowOrigin::Any);
