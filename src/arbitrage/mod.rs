@@ -21,7 +21,7 @@ impl Portfolio {
     fn print(&self) {
         println!("{} {} = {}", self.qty, self.asset, self.value)
     }
-    fn to_json(&self) -> String{
+    fn to_json(&self) -> String {
         format!("{{\"qty\":{},\"asset\":\"{}\",\"value\":{} }}", self.qty, self.asset, self.value)
     }
 }
@@ -36,10 +36,10 @@ pub struct Operations {
 
 impl Operations {
     fn get_recap(&mut self) {
-        let T1=&self.operations[0];
-        let T2=&self.operations[1];
-        let T3=&self.operations[2];
-        let T4=&self.operations[3];
+        let T1 = &self.operations[0];
+        let T2 = &self.operations[1];
+        let T3 = &self.operations[2];
+        let T4 = &self.operations[3];
         self.recap =
             vec![
                 format!("{} {}{}@{} at {}", T1.transaction.typ, T1.transaction.supra, T1.transaction.infra, T1.transaction.broker, T1.transaction.meanPrice),
@@ -48,24 +48,32 @@ impl Operations {
                 format!("{} {}{}@{} at {}", T4.transaction.typ, T4.transaction.supra, T4.transaction.infra, T4.transaction.broker, T4.transaction.meanPrice),
             ];
     }
-    fn to_json(&mut self )-> String{ 
+    fn to_json(&mut self) -> String {
         self.get_recap();
-        let mut ordersstr = format!("{{\"profit\":\"{}\",\"profit_pc\":\"{}\",\"best\":[",self.profit,self.profitpc);
+        let mut total_com = 0.;
+        for i in self.operations.iter() {
+            total_com = total_com+i.transaction.commission;
+        }
+        let mut ordersstr = format!("{{\"profit\":\"{}\",\"profit_pc\":\"{}\",\"total_commission\":{},\"best\":[", self.profit, self.profitpc,total_com);
         let mut st = "";
         for i in self.recap.iter() {
-            ordersstr = format!("{}{}\"{}\"", ordersstr, st,i);
+
+            ordersstr = format!("{}{}\"{}\"", ordersstr, st, i);
             st = ",";
         }
-        ordersstr = format!("{}],\"best_operations\":[",ordersstr);
+        ordersstr = format!("{}],\"best_operations\":[", ordersstr);
         let mut st = "";
+        let mut total_com = 0.;
         for i in self.operations.iter() {
-            ordersstr = format!("{}{}{{\"transaction\":{},\"result\":{} }}", ordersstr, st,i.transaction.to_json(), i.portfolio.to_json());
+
+            ordersstr = format!("{}{}{{\"transaction\":{},\"result\":{} }}", ordersstr, st, i.transaction.to_json(), i.portfolio.to_json());
             st = ",";
         }
         ordersstr = format!("{}]}}", ordersstr);
         ordersstr
     }
 }
+
 pub struct Transactions {
     transactions: HashMap<String, Transaction>,
     bestVal: f64,
@@ -99,18 +107,18 @@ impl Transactions {
         }
     }
 }
+
 #[derive(Clone)]
 pub struct Transaction {
     broker: String,
     typ: String,
     budget: f64,
     commission: f64,
-    commission_transfer: f64,
     tradingBudget: f64,
     orders: Vec<Level>,
     meanPrice: f64,
-    infra:String,
-    supra:String,
+    infra: String,
+    supra: String,
 
     remainer: f64,
     quantityTotal: f64,
@@ -127,9 +135,10 @@ impl Transaction {
         }
         ordersstr = format!("{}]", ordersstr);
 
-        format!("{{ \"broker\":\"{}\",\"budget\":{}, \"commissionTrading\":{},\"commissionTransfer\":{},\"tradingBudget\":{},\"orders\":{},\"meanPrice\":{},\"quantityExchanged\":{},\"remainer\":{},\"value\":{} }}", self.broker, self.budget, self.commission, self.commission_transfer, self.tradingBudget, ordersstr, self.meanPrice, self.quantityTotal, self.remainer, self.value)
+        format!("{{ \"type\":\"{}\", \"broker\":\"{}\",\"budget\":{}, \"commission\":{},\"orders\":{},\"meanPrice\":{},\"quantityExchanged\":{},\"remainer\":{} }}", self.typ, self.broker, self.budget, self.commission, ordersstr, self.meanPrice, self.quantityTotal, self.remainer)
     }
 }
+
 #[derive(Clone)]
 struct Level {
     qty: f64,
@@ -150,44 +159,8 @@ pub fn recap(budget: f64, infra: String, supra: String, R: &DataRegistry, DICT: 
     let mut cheapestBroker: String;
     let mut cheapestAsk: Vec<(f64, f64)>;
 
-    let mut O=optimize_single(budget, infra, supra, R, DICT);
+    let mut O = optimize_single(budget, infra, supra, R, DICT);
     O.to_json()
-    /*    let TTB = optimize_single_buy(budget, infra.to_string(), supra.to_string(), R, DICT);
-
-
-        match TTB.best {
-            Some(ref best_) => {
-                let BEST = TTB.transactions.get(best_).unwrap();
-                let newbudget = BEST.quantityTotal;
-
-
-                println!("OP2 SELL");
-                let TTS = optimize_single_sell(newbudget, infra.to_string(), supra.to_string(), R, DICT);
-
-                match TTS.best {
-                    Some(ref bests_) => {
-                        let BESTS = TTS.transactions.get(bests_).unwrap();
-                        let profit = BESTS.value - BEST.value;
-                        let profit_pc = (profit / BEST.value) * 100.;
-                        let d2 = Utc::now();
-                        let duration = d2.signed_duration_since(d1);
-
-                        let ms = duration.num_microseconds().unwrap();
-                        let ms: f64 = ms as f64 / 1000.;
-
-
-                        format!("{{\"computationTime_ms\":{},\"budget\":{},\"profit\":{},\"profit_pc\":{},\"recap\":[\"{}\",\"TRANSFER to {}\",\"{}\"],\"transactions\":[{{\"name\":\"first buy\",\"result\":{} }},{{\"name\":\"sell\",\"result\":{} }}]}}", ms, budget, profit, profit_pc, TTB.best_recap, TTS.best.as_ref().unwrap(), TTS.best_recap, TTB.to_json(), TTS.to_json())
-                    }
-                    None => {
-                        format!("[{{\"operation\":\"first buy\",\"result\":{} }} }}]", TTB.to_json())
-                    }
-                }
-            }
-            None => {
-                format!("[{{\"operation\":\"first buy\",\"result\":{} }} }}]", TTB.to_json())
-            }
-        }
-        */
 }
 
 
@@ -235,6 +208,7 @@ pub fn optimize_single(budget: f64, infra: String, supra: String, R: &DataRegist
     }
     O
 }
+
 #[derive(Clone)]
 pub struct TransactionResult {
     pub portfolio: Portfolio,
@@ -247,17 +221,17 @@ pub fn getDepositTransaction(ptf: &Portfolio, data: &RegistryData, broker: Strin
         budget: ptf.qty,
         commission: 0.,
         typ: "DEPOSIT".to_string(),
-        commission_transfer: 0.,
         tradingBudget: ptf.qty,
-        orders: Vec::new(),infra:infra.to_string(),
-        supra:supra.to_string(),
+        orders: Vec::new(),
+        infra: infra.to_string(),
+        supra: supra.to_string(),
         meanPrice: 0.,
         value: 0.,
         quantityTotal: 0.,
         remainer: 0.,
     };
-    T.commission_transfer = get_deposit_commission(broker.to_string(), ptf.qty);
-    let q = ptf.qty - T.commission_transfer;
+    T.commission = get_deposit_commission(broker.to_string(), ptf.qty);
+    let q = ptf.qty - T.commission;
     let v = ptf.value * q / ptf.qty;
     TransactionResult { portfolio: Portfolio { qty: q, value: v, asset: supra }, transaction: T }
 }
@@ -268,8 +242,8 @@ pub fn getWithdrawTransaction(ptf: &Portfolio, data: &RegistryData, broker: Stri
         budget: ptf.qty,
         commission: 0.,
         typ: "WITHDRAW".to_string(),
-        commission_transfer: 0.,infra:infra.to_string(),
-        supra:supra.to_string(),
+        infra: infra.to_string(),
+        supra: supra.to_string(),
         tradingBudget: ptf.qty,
         orders: Vec::new(),
         meanPrice: 0.,
@@ -277,9 +251,17 @@ pub fn getWithdrawTransaction(ptf: &Portfolio, data: &RegistryData, broker: Stri
         quantityTotal: 0.,
         remainer: 0.,
     };
-    T.commission_transfer = get_withdraw_commission(broker.to_string(), ptf.asset.to_string(), ptf.qty);
-    let q = ptf.qty - T.commission_transfer;
-    let v = ptf.value * q / ptf.qty;
+    let commission_supra = get_withdraw_commission(broker.to_string(), ptf.asset.to_string(), ptf.qty);
+    let ASKS = data.get_asks();
+    let ordered: Vec<(f64, String, f64)> = orderbook_to_ordered(ASKS, false);
+    println!("or {}",ordered.len());
+    if ordered.len() > 0 {
+        let priceapprx = ordered[0].0;
+        println!("or {:?}",ordered[0]);
+        T.commission = commission_supra * priceapprx;
+    }
+    let q = ptf.qty - commission_supra;
+    let v = ptf.value -T.commission;//* q / ptf.qty;
     TransactionResult { portfolio: Portfolio { qty: q, value: v, asset: supra }, transaction: T }
 }
 
@@ -298,11 +280,12 @@ pub fn getSellTransaction(ptf: &Portfolio, data: &RegistryData, broker: String, 
         budget: ptf.qty,
         typ: "SELL".to_string(),
         commission: 0.,
-        commission_transfer: 0.,
+
         tradingBudget: budgetAvailable,
         orders: Vec::new(),
-        meanPrice: 0.,infra:infra.to_string(),
-        supra:supra.to_string(),
+        meanPrice: 0.,
+        infra: infra.to_string(),
+        supra: supra.to_string(),
         quantityTotal: 0.,
         value: 0.,
         remainer: 0.,
@@ -329,15 +312,15 @@ pub fn getSellTransaction(ptf: &Portfolio, data: &RegistryData, broker: String, 
         budres = budres - operationQuantitySold;
     }
     T.commission = earnings * commissionBrokerTrading;
-    T.commission_transfer = get_deposit_commission(broker.to_string(), earnings);
+
     meanPrice = meanPrice / quantitySold;
     T.quantityTotal = quantitySold;
-    let residual = earnings - T.commission_transfer - T.commission;
+    let residual = earnings - T.commission;
     T.meanPrice = meanPrice;
     T.remainer = budres;
 
     T.value = residual;
-    TransactionResult { portfolio: Portfolio { qty: T.quantityTotal, value: T.value, asset: supra }, transaction: T }
+    TransactionResult { portfolio: Portfolio { qty: T.quantityTotal, value: T.value, asset: infra }, transaction: T }
 }
 
 pub fn getBuyTransaction(ptf: &Portfolio, data: &RegistryData, broker: String, infra: String, supra: String) -> TransactionResult {
@@ -354,11 +337,9 @@ pub fn getBuyTransaction(ptf: &Portfolio, data: &RegistryData, broker: String, i
         broker: broker.to_string(),
         budget: ptf.qty,
         typ: "BUY".to_string(),
-        infra:infra.to_string(),
-        supra:supra.to_string(),
-
+        infra: infra.to_string(),
+        supra: supra.to_string(),
         commission: 0.,
-        commission_transfer: 0.,
         tradingBudget: budgetAvailable,
         orders: Vec::new(),
         meanPrice: 0.,
@@ -366,7 +347,6 @@ pub fn getBuyTransaction(ptf: &Portfolio, data: &RegistryData, broker: String, i
         quantityTotal: 0.,
         remainer: 0.,
     };
-
     for &(ref price, ref pricestr, ref size) in ordered.iter() {
         if budres <= 0.000000001 { break }
         let levelQty = *size;
@@ -387,17 +367,16 @@ pub fn getBuyTransaction(ptf: &Portfolio, data: &RegistryData, broker: String, i
         budres = budres - operationCost;
     }
     T.commission = invested * commissionBrokerTrading;
-    T.commission_transfer = get_withdraw_commission(broker.to_string(), supra.to_string(), invested);
-    let residual = invested - T.commission_transfer - T.commission;
+    let residual = invested - T.commission;
     meanPrice = invested / quantityBought; //meanPrice / quantityBought;
     T.quantityTotal = quantityBought;
     T.meanPrice = meanPrice;
     T.remainer = budres;
-    T.value = T.remainer + residual - T.commission_transfer;
+    T.value = T.remainer + residual;
     T.commission = T.value * commissionBrokerTrading;
     TransactionResult { portfolio: Portfolio { qty: T.quantityTotal, value: T.value, asset: supra }, transaction: T }
 }
-
+/*
 pub fn optimize_single_buy(budget: f64, infra: String, supra: String, R: &DataRegistry, DICT: &DictRegistry) -> Transactions {
     let mut TT = Transactions { typ: "BUY".to_string(), meanPrice: 0., best_recap: "".to_string(), name: format!("Buy {}/{}", supra, infra), symbol: format!("{}{}", supra, infra), transactions: HashMap::new(), bestVal: 1000000000., best: None };
     for i in 0..BROKERS.len() {//for each broker
@@ -426,7 +405,7 @@ pub fn optimize_single_buy(budget: f64, infra: String, supra: String, R: &DataRe
                                     broker: broker.to_string(),
                                     budget: budget,
                                     commission: 0.,
-                                    commission_transfer: 0.,
+
                                     typ: "BUY".to_string(),
                                     tradingBudget: budgetAvailable,
                                     orders: Vec::new(),
@@ -460,8 +439,8 @@ pub fn optimize_single_buy(budget: f64, infra: String, supra: String, R: &DataRe
                                     println!("    {} buy {} {} {} {} ", broker, levelQty, levelPrice, operationCost, operationQuantityBought);
                                 }
                                 T.commission = invested * commissionBrokerTrading;
-                                T.commission_transfer = get_withdraw_commission(broker.to_string(), supra.to_string(), invested);
-                                let residual = invested - T.commission_transfer - T.commission;
+                                //T.commission_transfer = get_withdraw_commission(broker.to_string(), supra.to_string(), invested);
+                                let residual = invested  - T.commission;
                                 meanPrice = quantityBought / residual; //meanPrice / quantityBought;
 
                                 T.quantityTotal = quantityBought;
@@ -529,7 +508,7 @@ pub fn optimize_single_sell(budget: f64, infra: String, supra: String, R: &DataR
                                     commission: 0.,
                                     infra:infra.to_string(),
                                     supra:supra.to_string(),
-                                    commission_transfer: 0.,
+
                                     tradingBudget: budgetAvailable,
                                     orders: Vec::new(),
                                     meanPrice: 0.,
@@ -562,10 +541,10 @@ pub fn optimize_single_sell(budget: f64, infra: String, supra: String, R: &DataR
                                     println!("    {} sell {} {} {} {} ", broker, levelQty, levelPrice, operationEarnings, operationQuantitySold);
                                 }
                                 T.commission = earnings * commissionBrokerTrading;
-                                T.commission_transfer = get_deposit_commission(broker.to_string(), earnings);
+
                                 meanPrice = meanPrice / quantitySold;
                                 T.quantityTotal = quantitySold;
-                                let residual = earnings - T.commission_transfer - T.commission;
+                                let residual = earnings - T.commission;
                                 T.meanPrice = meanPrice;
                                 T.remainer = budres;
 
@@ -594,7 +573,7 @@ pub fn optimize_single_sell(budget: f64, infra: String, supra: String, R: &DataR
         TT.best_recap = format!("{} {}@{} at {}", TT.typ, TT.symbol, TT.best.as_ref().unwrap(), TT.meanPrice);
     }
     TT
-}
+}*/
 
 fn get_trading_commission(broker: String, value: f64) -> f64 {
     match broker.as_ref() {
