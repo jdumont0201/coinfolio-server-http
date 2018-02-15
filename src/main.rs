@@ -1,9 +1,11 @@
 #![allow(non_snake_case)]
 #![allow(non_camel_case_types)]
 #![allow(unused_must_use)]
-#![warn(unused_mut)]
-#[allow(unused_imports)]
-#[allow(dead_code)]
+#![allow(unused_mut)]
+#![allow(unused_variables)]
+#![allow(unused_assignments)]
+#![allow(unused_imports)]
+#![allow(dead_code)]
 
 
 //LOAD EXTERNAL MODULES
@@ -31,6 +33,8 @@ mod routes;
 mod Brokers;
 mod arbitrage;
 mod dictionary;
+mod transactions;
+mod structures;
 mod commissions;
 mod middlewares;
 mod fetch;
@@ -39,6 +43,7 @@ mod write;
 mod debug;
 mod ws_server;
 mod types;
+mod boot;
 
 use types::{DataRegistry, TextRegistry, DictRegistry,OrderbookSide,BidaskRegistry, BidaskReadOnlyRegistry, BidaskTextRegistry};
 //SPECIFY NAMESPACES
@@ -98,26 +103,21 @@ fn main() {
     let R5 = R.clone();
     let registry5 = R.clone();
     let RT4 = RT.clone();
-
     let DICT=DR.clone();
     children.push(thread::spawn(move || {
-        routes::start_http_server(&RT2,&R2,&DICT);
+        boot::start_http_server(&RT2,&R2,&DICT);
     }));
 
     //"update data" threads
     let DICT=DR.clone();
     children.push(thread::spawn(move || {
-        fetch::start_datarefresh_thread(&R5, &RT3,&DR);
+        boot::start_datarefresh_thread(&R5, &RT3,&DR);
     }));
-
-    children.push(thread::spawn(move || {    Universal::listen_ws_depth(TASK::WS_DEPTH, BROKER::BINANCE,"ETHUSDT".to_string(),&R8);   }));
-    children.push(thread::spawn(move || {    Universal::listen_ws_depth(TASK::WS_DEPTH, BROKER::HITBTC,"ETHUSD".to_string(),&R7); }));
-    children.push(thread::spawn(move || {    Universal::listen_ws_depth(TASK::WS_DEPTH, BROKER::BITFINEX,"tETHUSD".to_string(),&R9); }));
 
 
     children.push(thread::spawn(move || {
         thread::sleep(std::time::Duration::new(1, 0));
-        start_websocket_server();
+        boot::start_websocket_server();
     }));
 
 
@@ -126,11 +126,4 @@ fn main() {
     for child in children {
         let _ = child.join();
     }
-}
-
-
-
-fn start_websocket_server(){
-
-    ws::listen("127.0.0.1:3012", |out| { ws_server::Server { out: out } }).unwrap()
 }

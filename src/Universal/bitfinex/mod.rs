@@ -8,6 +8,7 @@ use Universal::Universal_Orderbook;
 use Universal::Universal_Orderbook_in;
 use debug;
 use update;
+use Universal;
 use ws::{listen, connect, Handshake, Handler, Sender, Result as wsResult, Message, CloseCode};
 
 static NAME: &str = "bitfinex";
@@ -143,24 +144,6 @@ impl Handler for WSDepthClient {
         Ok(())
     }
     fn on_close(&mut self, code: CloseCode, reason: &str) {
-        match code {
-            CloseCode::Normal => println!("The client is done with the connection."),
-            CloseCode::Away => { println!("The client is leaving the site. Update room count"); }
-            CloseCode::Abnormal => println!("Closing handshake failed! Unable to obtain closing status from client."),
-            CloseCode::Protocol => println!("protocol"),
-            CloseCode::Unsupported => println!("Unsupported"),
-            CloseCode::Status => { println!("Status"); }
-            CloseCode::Abnormal => println!("Abnormal"),
-            CloseCode::Invalid => println!("Invalid"),
-            CloseCode::Protocol => println!("protocol"),
-            CloseCode::Policy => println!("Policy"),
-            CloseCode::Size => println!("Size"),
-            CloseCode::Extension => println!("Extension"),
-            CloseCode::Protocol => println!("protocol"),
-            CloseCode::Restart => println!("Restart"),
-            CloseCode::Again => println!("Again"),
-
-            _ => println!("CLOSE The client encountered an error: {}", reason),
-        }
+        Universal::manage_close_ws(code, reason);
     }
-}
+    }

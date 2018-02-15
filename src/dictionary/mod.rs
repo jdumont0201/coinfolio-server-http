@@ -1,6 +1,7 @@
 use std::collections::HashMap;
 use types::DictRegistry;
-use Brokers::{BROKER,getKey,getEnum,TASK,BROKERS};
+use debug;
+use Brokers::{BROKER, getKey, getEnum, TASK, BROKERS};
 macro_rules! hashmap {
     ($( $key: expr => $val: expr ),*) => {{
          let mut map = ::std::collections::HashMap::new();
@@ -23,12 +24,12 @@ impl InfraSupra {
 
 #[derive(Clone, Debug)]
 pub struct Dictionary {
-    pub   rawToUni: HashMap<&'static str, HashMap<&'static str, InfraSupra>>,
+    pub rawToUni: HashMap<&'static str, HashMap<&'static str, InfraSupra>>,
     pub uniToRaw: HashMap<&'static str, HashMap<&'static str, HashMap<&'static str, &'static str>>>,
 }
 
 impl Dictionary {
-    pub fn rawNameToUniversalName(& self, broker: &str, pair: &str) -> String {
+    pub fn rawNameToUniversalName(&self, broker: &str, pair: &str) -> String {
         match self.rawToUni.get(&broker) {
             Some(b) => {
                 match b.get(&pair) {
@@ -41,7 +42,7 @@ impl Dictionary {
             None => pair.to_string()
         }
     }
-    pub fn rawNameToAltRawName(& self, broker: &str, pair: &str) -> String {
+    pub fn rawNameToAltRawName(&self, broker: &str, pair: &str) -> String {
         match self.rawToUni.get(&broker) {
             Some(b) => {
                 match b.get(&pair) {
@@ -56,10 +57,13 @@ impl Dictionary {
     }
     pub fn infrasupraToRawName(&self, broker: &str, infra: &str, supra: &str) -> Option<String> {
         if !self.uniToRaw.contains_key(infra) {
+            debug::verb(format!("infrasupraToRawName no infra={} in rawuni ",infra));
             None
         } else if !self.uniToRaw.get(infra).unwrap().contains_key(supra) {
+            debug::verb(format!("infrasupraToRawName no supra {} in rawuni[{}]",supra,infra ));
             None
         } else if !self.uniToRaw.get(infra).unwrap().get(supra).unwrap().contains_key(broker) {
+            debug::verb(format!("infrasupraToRawName no broker for rawuni infra supra"));
             None
         } else {
             Some(self.uniToRaw.get(infra).unwrap().get(supra).unwrap().get(broker).unwrap().to_string())
@@ -67,17 +71,16 @@ impl Dictionary {
     }
     pub fn infrasupraToAltRawName(&self, broker: &str, infra: &str, supra: &str) -> Option<String> {
         let raw = self.infrasupraToRawName(broker, infra, supra);
-        if raw.is_some(){
-            Some(self.rawNameToAltRawName(broker,&raw.unwrap()))
-        }else{
+        if raw.is_some() {
+            Some(self.rawNameToAltRawName(broker, &raw.unwrap()))
+        } else {
             None
         }
     }
+}
 
-    }
-
-    pub fn generateReference() -> Dictionary {
-        let rawToUni: HashMap<&'static str, HashMap<&'static str, InfraSupra>> = hashmap![
+pub fn generateReference() -> Dictionary {
+    let rawToUni: HashMap<&'static str, HashMap<&'static str, InfraSupra>> = hashmap![
             "bitfinex"=> hashmap![
                 "tBTCUSD"=> InfraSupra {infra: "USD", supra: "BTC",alt:""},
                 "tAIDBTC"=> InfraSupra {infra: "BTC", supra: "AID",alt:""},
@@ -2873,75 +2876,76 @@ impl Dictionary {
         ]
     ];
 
-        /*
-            for (broker, mut hm) in rawToUni.iter() {
-                for (raw, mut is) in hm.iter() {
+    /*
+        for (broker, mut hm) in rawToUni.iter() {
+            for (raw, mut is) in hm.iter() {
 
-                    is.uni = format!("{}{}",is.supra,is.infra)
-                }
-            }
-        */
-        let mut uniToRaw: HashMap<&'static str, HashMap<&'static str, HashMap<&'static str, &'static str>>> = HashMap::new();
-        for (broker, hm) in rawToUni.iter() {
-            for (raw, is) in hm.iter() {
-                if uniToRaw.contains_key(is.infra) {} else {
-                    let mut h: HashMap<&'static str, HashMap<&'static str, &'static str>> = HashMap::new();
-                    uniToRaw.insert(is.infra, h);
-                }
+                is.uni = format!("{}{}",is.supra,is.infra)
             }
         }
-        for (broker, hm) in rawToUni.iter() {
-            for (raw, is) in hm.iter() {
-                if !uniToRaw.get(is.infra).unwrap().contains_key(is.supra) {
-                    let mut h: HashMap<&'static str, &'static str> = HashMap::new();
-                    uniToRaw.get_mut(is.infra).unwrap().insert(is.supra, h);
-                }
+    */
+    let mut uniToRaw: HashMap<&'static str, HashMap<&'static str, HashMap<&'static str, &'static str>>> = HashMap::new();
+    for (broker, hm) in rawToUni.iter() {
+        for (raw, is) in hm.iter() {
+            if uniToRaw.contains_key(is.infra) {} else {
+                let mut h: HashMap<&'static str, HashMap<&'static str, &'static str>> = HashMap::new();
+                uniToRaw.insert(is.infra, h);
             }
         }
-        for (broker, hm) in rawToUni.iter() {
-            for (raw, is) in hm.iter() {
-                if !uniToRaw.get(is.infra).unwrap().get(is.supra).unwrap().contains_key(broker) {
-                    uniToRaw.get_mut(is.infra).unwrap().get_mut(is.supra).unwrap().insert(broker, raw);
-                }
-            }
-        }
-        Dictionary { uniToRaw: uniToRaw, rawToUni: rawToUni }
     }
-    pub fn infrasupraToUniPair(supra: &str, infra: &str) -> String {
-        format!("{}{}", supra, infra)
+    for (broker, hm) in rawToUni.iter() {
+        for (raw, is) in hm.iter() {
+            if !uniToRaw.get(is.infra).unwrap().contains_key(is.supra) {
+                let mut h: HashMap<&'static str, &'static str> = HashMap::new();
+                uniToRaw.get_mut(is.infra).unwrap().insert(is.supra, h);
+            }
+        }
     }
+    for (broker, hm) in rawToUni.iter() {
+        for (raw, is) in hm.iter() {
+            if !uniToRaw.get(is.infra).unwrap().get(is.supra).unwrap().contains_key(broker) {
+                uniToRaw.get_mut(is.infra).unwrap().get_mut(is.supra).unwrap().insert(broker, raw);
+            }
+        }
+    }
+    Dictionary { uniToRaw: uniToRaw, rawToUni: rawToUni }
+}
 
-pub fn read_rawname(broker:BROKER,supra:String,infra:String,DICT : &DictRegistry) -> Option<String>{
+pub fn infrasupraToUniPair(supra: &str, infra: &str) -> String {
+    format!("{}{}", supra, infra)
+}
+
+pub fn read_rawname(broker: BROKER, supra: String, infra: String, DICT: &DictRegistry) -> Option<String> {
     if let Ok(D) = DICT.read() {
         let DD: &Dictionary = &*D;
         let broker_str: String = getKey(broker);
         let rawnameopt = DD.infrasupraToRawName(&broker_str, &infra, &supra);
         if rawnameopt.is_some() {
             Some(rawnameopt.unwrap())
-        }else{
+        } else {
             None
         }
-    }else{
+    } else {
         None
     }
 }
-pub fn read_rawaltname(broker:BROKER,supra:String,infra:String,DICT : &DictRegistry) -> Option<String>{
+
+pub fn read_rawaltname(broker: BROKER, supra: String, infra: String, DICT: &DictRegistry) -> Option<String> {
     if let Ok(D) = DICT.read() {
         let DD: &Dictionary = &*D;
         let broker_str: String = getKey(broker);
         let rawnameopt = DD.infrasupraToAltRawName(&broker_str, &infra, &supra);
         if rawnameopt.is_some() {
-            let rawname=rawnameopt.unwrap();
-            if rawname.len()>0 {
+            let rawname = rawnameopt.unwrap();
+            if rawname.len() > 0 {
                 Some(rawname)
-            }else {
-                read_rawname(broker,supra,infra,DICT)
+            } else {
+                read_rawname(broker, supra, infra, DICT)
             }
-
-        }else{
+        } else {
             None
         }
-    }else{
+    } else {
         None
     }
 }

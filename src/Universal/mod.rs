@@ -7,10 +7,11 @@ use serde_json;
 use reqwest;
 use std;
 use types::{DataRegistry, TextRegistry, DictRegistry, OrderbookSide, BidaskRegistry, BidaskReadOnlyRegistry, BidaskTextRegistry};
-
+use ws::CloseCode;
 use std::collections::HashMap;
 use dictionary::Dictionary;
 use dictionary;
+
 use Brokers::{BROKER, getKey, TASK, BROKERS};
 use base64::{encode, decode};
 use std::time::Instant;
@@ -29,9 +30,9 @@ impl RegistryData {
     pub fn get_bids_mut(&mut self) -> &mut OrderbookSide {
         &mut self.orderbook.bids
     }
-    pub fn get_bids(&self) -> &OrderbookSide {        &self.orderbook.bids    }
-    pub fn has_bids(&self) -> bool {        self.orderbook.bids.len() >0    }
-    pub fn has_asks(&self) -> bool {        self.orderbook.asks.len() >0    }
+    pub fn get_bids(&self) -> &OrderbookSide { &self.orderbook.bids }
+    pub fn has_bids(&self) -> bool { self.orderbook.bids.len() > 0 }
+    pub fn has_asks(&self) -> bool { self.orderbook.asks.len() > 0 }
     pub fn get_asks_mut(&mut self) -> &mut OrderbookSide {
         &mut self.orderbook.asks
     }
@@ -45,7 +46,10 @@ impl RegistryData {
         self.orderbook.asks = asks;
     }
     pub fn print(&self) {
-        println!("{:?}", self.orderbook.bids)
+        let b=&self.bid.clone().unwrap();
+        let a=self.ask.clone().unwrap();
+        let l=self.last.clone().unwrap();
+        println!("bid:{} ask:{} last:{} asks:{:?} bids:{:?}",b,a,l,&self.orderbook.asks,&self.orderbook.bids)
     }
 }
 
@@ -157,7 +161,8 @@ fn parse_response_depth(task: TASK, broker: BROKER, text: String) -> Universal_O
     match task {
         TASK::HTTP_DEPTH => {
             match broker {
-                BROKER::BINANCE => {//todo
+                BROKER::BINANCE => {
+                    //todo
                     let text2 = str::replace(&text, ",[]", "");
                     r = Universal_Orderbook { bids: HashMap::new(), asks: HashMap::new() };
                     //r = text2;
@@ -213,7 +218,6 @@ pub fn fetch_depth(broker: BROKER, infra: &String, supra: &String, DICT: &DictRe
             Ok(mut res) => {
                 match res.text() {
                     Ok(val) => {
-
                         parse_response_depth(TASK::HTTP_DEPTH, broker, val)
                     }
                     Err(err) => {
@@ -227,7 +231,6 @@ pub fn fetch_depth(broker: BROKER, infra: &String, supra: &String, DICT: &DictRe
                 result
             }
         }
-
     } else {
         result
     }
@@ -299,12 +302,12 @@ fn get_url(task: TASK, broker: BROKER, pair: String) -> String {
     match task {
         TASK::HTTP_BIDASK => {
             match broker {
-                BROKER::BINANCE => { r = binance::URL_HTTP_BIDASK.to_string(); }
-                BROKER::HITBTC => { r = hitbtc::URL_HTTP_BIDASK.to_string(); }
-                BROKER::KUCOIN => { r = kucoin::URL_HTTP_BIDASK.to_string(); }
-                BROKER::KRAKEN => { r = kraken::URL_HTTP_BIDASK.to_string(); }
-                BROKER::CRYPTOPIA => { r = cryptopia::URL_HTTP_BIDASK.to_string(); }
-                BROKER::BITFINEX => { r = bitfinex::URL_HTTP_BIDASK.to_string(); }
+                BROKER::BINANCE => { r = binance::URL_HTTP_BIDASK.to_string(); },
+                BROKER::HITBTC => { r = hitbtc::URL_HTTP_BIDASK.to_string(); },
+                BROKER::KUCOIN => { r = kucoin::URL_HTTP_BIDASK.to_string(); },
+                BROKER::KRAKEN => { r = kraken::URL_HTTP_BIDASK.to_string(); },
+                BROKER::CRYPTOPIA => { r = cryptopia::URL_HTTP_BIDASK.to_string(); },
+                BROKER::BITFINEX => { r = bitfinex::URL_HTTP_BIDASK.to_string(); },
                 _ => {}
             }
         }
@@ -342,7 +345,7 @@ fn get_url(task: TASK, broker: BROKER, pair: String) -> String {
                 BROKER::BINANCE => {
                     r = binance::URL_WS_DEPTH.to_string();
                     r = str::replace(&r, "XXX", &pair);
-                    r=r.to_lowercase();
+                    r = r.to_lowercase();
                 }
                 BROKER::HITBTC => {
                     r = hitbtc::URL_WS_DEPTH.to_string();
@@ -428,5 +431,28 @@ pub fn to_hex_string(bytes: Vec<u8>) -> String {
     let strs: Vec<String> = bytes.iter()
         .map(|b| format!("{:02X}", b))
         .collect();
-    strs.connect(" ")
+    //   strs.connect(" ")
+    strs.join(" ")
+}
+
+pub fn manage_close_ws(code: CloseCode, reason: &str) {
+    match code {
+        CloseCode::Normal => { println!("The client is done with the connection.") },
+        CloseCode::Away => { println!("The client is leaving the site. Update room count"); },
+        CloseCode::Abnormal => { println!("Closing handshake failed! Unable to obtain closing status from client."); },
+        CloseCode::Protocol => { println!("protocol"); },
+        CloseCode::Unsupported => {
+            println!("Unsupported");
+        },
+        CloseCode::Status => { println!("Status"); }
+        CloseCode::Invalid => { println!("Invalid") }
+        CloseCode::Policy => {
+            println!("Policy")
+        }
+        CloseCode::Size => { println!("Size") }
+        CloseCode::Extension => { println!("Extension") }
+        CloseCode::Restart => { println!("Restart") }
+        CloseCode::Again => { println!("Again") }
+        _ => { println!("CLOSE The client encountered an error: {}", reason) }
+    }
 }

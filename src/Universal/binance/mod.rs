@@ -2,11 +2,13 @@ use std;use Data;
 use std::collections::HashMap;
 use types::{DataRegistry, TextRegistry, DictRegistry,OrderbookSide,BidaskRegistry, BidaskReadOnlyRegistry, BidaskTextRegistry};
 use serde_json;
+use debug;
 use Brokers::BROKER;
 use Universal::Universal_Orderbook;
 use Universal::Universal_Orderbook_in;
 use update;
 use ws::{listen, connect, Handshake, Handler, Sender, Result as wsResult, Message, CloseCode};
+use Universal;
 
 static NAME: &str = "binance";
 pub static URL_HTTP_BIDASK: &str = "https://api.binance.com/api/v1/ticker/bookTicker";
@@ -95,7 +97,7 @@ impl Handler for WSTickClient {
     }
     fn on_message(&mut self, msg: Message) -> wsResult<()> {
         let mmm = msg.to_string();
-        println!("WS msg {} {}", NAME, mmm);
+        println!("WS msg {} {}", NAME, mmm.to_string());
         let mm: Result<WSTick, serde_json::Error> = serde_json::from_str(&mmm);
         match mm {
             Ok(mm_) => {
@@ -110,25 +112,8 @@ impl Handler for WSTickClient {
         //let message: Option<String> = Universal::get_universal_msg(self, &m);
     }
     fn on_close(&mut self, code: CloseCode, reason: &str) {
-        match code {
-            CloseCode::Normal => println!("The client is done with the connection."),
-            CloseCode::Away => { println!("The client is leaving the site. Update room count"); }
-            CloseCode::Abnormal => println!("Closing handshake failed! Unable to obtain closing status from client."),
-            CloseCode::Protocol => println!("protocol"),
-            CloseCode::Unsupported => println!("Unsupported"),
-            CloseCode::Status => { println!("Status"); }
-            CloseCode::Abnormal => println!("Abnormal"),
-            CloseCode::Invalid => println!("Invalid"),
-            CloseCode::Protocol => println!("protocol"),
-            CloseCode::Policy => println!("Policy"),
-            CloseCode::Size => println!("Size"),
-            CloseCode::Extension => println!("Extension"),
-            CloseCode::Protocol => println!("protocol"),
-            CloseCode::Restart => println!("Restart"),
-            CloseCode::Again => println!("Again"),
+        Universal::manage_close_ws(code,reason);
 
-            _ => println!("CLOSE The client encountered an error: {}", reason),
-        }
     }
 }
 
@@ -147,6 +132,7 @@ impl Handler for WSDepthClient {
     }
     fn on_message(&mut self, msg: Message) -> wsResult<()> {
         let mmm = msg.to_string();
+        debug::print_ws_message(self.broker, &self.symbol, &msg.to_string());
         let mmm = str::replace(&mmm, ",[]", "");
 
         let mm: Result<WSDepth, serde_json::Error> = serde_json::from_str(&mmm);
@@ -179,25 +165,7 @@ impl Handler for WSDepthClient {
         //let message: Option<String> = Universal::get_universal_msg(self, &m);
     }
     fn on_close(&mut self, code: CloseCode, reason: &str) {
-        match code {
-            CloseCode::Normal => println!("The client is done with the connection."),
-            CloseCode::Away => { println!("The client is leaving the site. Update room count"); }
-            CloseCode::Abnormal => println!("Closing handshake failed! Unable to obtain closing status from client."),
-            CloseCode::Protocol => println!("protocol"),
-            CloseCode::Unsupported => println!("Unsupported"),
-            CloseCode::Status => { println!("Status"); }
-            CloseCode::Abnormal => println!("Abnormal"),
-            CloseCode::Invalid => println!("Invalid"),
-            CloseCode::Protocol => println!("protocol"),
-            CloseCode::Policy => println!("Policy"),
-            CloseCode::Size => println!("Size"),
-            CloseCode::Extension => println!("Extension"),
-            CloseCode::Protocol => println!("protocol"),
-            CloseCode::Restart => println!("Restart"),
-            CloseCode::Again => println!("Again"),
-
-            _ => println!("CLOSE The client encountered an error: {}", reason),
-        }
+        Universal::manage_close_ws(code, reason);
     }
 }
 
